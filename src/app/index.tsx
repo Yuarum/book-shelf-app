@@ -12,9 +12,15 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  ScrollView,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
+import {
+  GestureHandlerRootView,
+  PanGestureHandler,
+  PanGestureHandlerGestureEvent,
+} from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -30,8 +36,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STORAGE_KEY = '@book_shelf_data_v1';
 const TYPES_KEY = '@book_shelf_types_v1';
 
-// TypeScript Tipleri
-interface Item {
+export interface Item {
   id: string;
   title: string;
   type: string;
@@ -41,78 +46,99 @@ interface Item {
   note?: string;
 }
 
-interface Shelf {
+export interface Shelf {
   id: string;
   name: string;
   items: Item[];
 }
 
-interface Library {
+export interface Library {
   id: string;
   name: string;
   shelves: Shelf[];
 }
 
-interface SearchItem extends Item {
+export interface SearchItem extends Item {
   libraryName: string;
   shelfName: string;
 }
 
 export default function Index() {
   const [isBookOpen, setIsBookOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'library' | 'search' | 'settings'>('library');
+  const [activeTab, setActiveTab] = useState<'library' | 'search' | 'stats' | 'settings'>('library');
 
-  // 3D Kapak Dönme Sürükleme State'i (Reanimated)
-  const dragProgress = useSharedValue(0);
+  const dragProgress = useSharedValue<number>(0);
 
-  // Tür Prefab'leri
   const [itemTypes, setItemTypes] = useState<string[]>(['Kitap', 'Oyun', 'Dergi', 'Manga']);
   const [newTypeName, setNewTypeName] = useState<string>('');
 
-  // Veri Yapısı
   const [libraries, setLibraries] = useState<Library[]>([]);
 
-  // Navigasyon State'leri
   const [selectedLibrary, setSelectedLibrary] = useState<Library | null>(null);
   const [selectedShelf, setSelectedShelf] = useState<Shelf | null>(null);
 
-  // Modal State'leri
   const [modalType, setModalType] = useState<'library' | 'shelf' | 'item' | null>(null);
   const [newItemTitle, setNewItemTitle] = useState<string>('');
   const [selectedType, setSelectedType] = useState<string>('Kitap');
   const [newOrderNo, setNewOrderNo] = useState<string>('');
 
-  // Detay Modalı State'leri
   const [detailItem, setDetailItem] = useState<Item | null>(null);
   const [editStatus, setEditStatus] = useState<string>('Başlanmadı');
   const [editProgress, setEditProgress] = useState<string>('');
   const [editNote, setEditNote] = useState<string>('');
 
-  // Arama State'i
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // --- 1. 3D KAPAK KATLANMA / AÇILMA ANIMASYONU ---
-  const onGestureEvent = (event: any) => {
-    if (event.nativeEvent.translationX < 0) {
-      // Sola sürüklendikçe 0 ile 1 arasında oranla
-      const progress = Math.min(Math.abs(event.nativeEvent.translationX) / (SCREEN_WIDTH * 0.7), 1);
-      dragProgress.value = progress;
+  // JSON Import / Export State
+  const [jsonInput, setJsonInput] = useState<string>('');
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+
+  // --- 1. 3D KAPAK JESTLERİ ---
+  const handleOpenBook = () => setIsBookOpen(true);
+  const handleCloseBook = () => {
+    setIsBookOpen(false);
+    setSelectedLibrary(null);
+    setSelectedShelf(null);
+  };
+
+  const onGestureEventOpen = (event: PanGestureHandlerGestureEvent) => {
+    const translationX = event.nativeEvent.translationX;
+    if (translationX < 0) {
+      dragProgress.value = Math.min(Math.abs(translationX) / (SCREEN_WIDTH * 0.6), 1);
     }
   };
 
-  const onGestureEnd = (event: any) => {
-    if (event.nativeEvent.translationX < -60) {
-      dragProgress.value = withSpring(1, { damping: 15 }, () => {
-        runOnJS(setIsBookOpen)(true);
+  const onGestureEndOpen = (event: PanGestureHandlerGestureEvent) => {
+    const translationX = event.nativeEvent.translationX;
+    if (translationX < -60) {
+      dragProgress.value = withSpring(1, { damping: 15 }, (finished) => {
+        if (finished) runOnJS(handleOpenBook)();
       });
     } else {
       dragProgress.value = withSpring(0);
     }
   };
 
-  // Sol Kenardan (Hinge) 3D Dönme Stili
+  const onGestureEventClose = (event: PanGestureHandlerGestureEvent) => {
+    const translationX = event.nativeEvent.translationX;
+    if (translationX > 0) {
+      dragProgress.value = Math.max(1 - translationX / (SCREEN_WIDTH * 0.6), 0);
+    }
+  };
+
+  const onGestureEndClose = (event: PanGestureHandlerGestureEvent) => {
+    const translationX = event.nativeEvent.translationX;
+    if (translationX > SCREEN_WIDTH * 0.3) {
+      dragProgress.value = withSpring(0, { damping: 18, stiffness: 90 }, (finished) => {
+        if (finished) runOnJS(handleCloseBook)();
+      });
+    } else {
+      dragProgress.value = withSpring(1, { damping: 18, stiffness: 90 });
+    }
+  };
+
   const cover3DAnimatedStyle = useAnimatedStyle(() => {
-    const rotateY = dragProgress.value * -110; // Sol kenardan geriye doğru 110 derece döner
+    const rotateY = dragProgress.value * -110;
     return {
       transform: [
         { perspective: 1200 },
@@ -120,18 +146,11 @@ export default function Index() {
         { rotateY: `${rotateY}deg` },
         { translateX: SCREEN_WIDTH / 2 },
       ],
-      opacity: 1 - dragProgress.value * 0.3,
+      opacity: isBookOpen && dragProgress.value === 1 ? 0 : 1 - dragProgress.value * 0.2,
     };
   });
 
-  const resetCover = () => {
-    dragProgress.value = withSpring(0);
-    setIsBookOpen(false);
-    setSelectedLibrary(null);
-    setSelectedShelf(null);
-  };
-
-  // --- 2. ASYNCSTORAGE (VERİ YÜKLEME / KAYDETME) ---
+  // --- 2. ASYNCSTORAGE ---
   useEffect(() => {
     loadData();
   }, []);
@@ -146,7 +165,7 @@ export default function Index() {
       const savedTypes = await AsyncStorage.getItem(TYPES_KEY);
 
       if (savedLibs) {
-        setLibraries(JSON.parse(savedLibs));
+        setLibraries(JSON.parse(savedLibs) as Library[]);
       } else {
         setLibraries([
           {
@@ -157,7 +176,7 @@ export default function Index() {
                 id: 'shelf-1',
                 name: '1. Raf',
                 items: [
-                  { id: 'i-1', title: 'Dune', type: 'Kitap', orderNo: '1', status: 'Okunuyor', progress: 'Sayfa 120', note: 'Harika gidiyor' },
+                  { id: 'i-1', title: 'Dune', type: 'Kitap', orderNo: '1', status: 'Okunuyor/Oynanıyor', progress: 'Sayfa 120', note: 'Harika gidiyor' },
                   { id: 'i-2', title: '1984', type: 'Kitap', orderNo: '2', status: 'Tamamlandı', progress: '', note: '' },
                 ],
               },
@@ -166,7 +185,7 @@ export default function Index() {
         ]);
       }
 
-      if (savedTypes) setItemTypes(JSON.parse(savedTypes));
+      if (savedTypes) setItemTypes(JSON.parse(savedTypes) as string[]);
     } catch (e) {
       console.error('Veri yükleme hatası:', e);
     }
@@ -181,7 +200,41 @@ export default function Index() {
     }
   };
 
-  // --- 3. SIRA DEĞİŞTİRME ---
+  // --- 3. İSTATİSTİK HESAPLAMALARI ---
+  const getAllItems = (): SearchItem[] => {
+    const result: SearchItem[] = [];
+    libraries.forEach((lib) => {
+      lib.shelves.forEach((sh) => {
+        sh.items.forEach((it) => {
+          result.push({
+            ...it,
+            libraryName: lib.name,
+            shelfName: sh.name,
+          });
+        });
+      });
+    });
+    return result;
+  };
+
+  const allItems = getAllItems();
+  const totalLibraries = libraries.length;
+  const totalShelves = libraries.reduce((acc, lib) => acc + lib.shelves.length, 0);
+  const totalItemsCount = allItems.length;
+
+  const completedItemsCount = allItems.filter(
+      (i) => i.status === 'Tamamlandı' || i.status === 'Bitti'
+  ).length;
+
+  const completionPercentage =
+      totalItemsCount > 0 ? Math.round((completedItemsCount / totalItemsCount) * 100) : 0;
+
+  const typeCounts = itemTypes.map((type) => ({
+    type,
+    count: allItems.filter((i) => i.type === type).length,
+  }));
+
+  // --- 4. SIRA DEĞİŞTİRME & CRUD ---
   const moveItemOrder = (itemId: string, direction: 'up' | 'down') => {
     if (!selectedLibrary || !selectedShelf) return;
 
@@ -219,7 +272,6 @@ export default function Index() {
     setSelectedShelf({ ...selectedShelf, items: newItems });
   };
 
-  // --- 4. SİLME VE EKLEME İŞLEMLERİ ---
   const deleteLibrary = (libId: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setLibraries(libraries.filter((l) => l.id !== libId));
@@ -277,7 +329,6 @@ export default function Index() {
     setModalType(null);
   };
 
-  // --- 5. DETAY MODALI ---
   const openDetailModal = (item: Item) => {
     setDetailItem(item);
     setEditStatus(item.status || 'Başlanmadı');
@@ -309,23 +360,24 @@ export default function Index() {
     setNewTypeName('');
   };
 
-  const getAllItemsWithLocation = (): SearchItem[] => {
-    let result: SearchItem[] = [];
-    libraries.forEach((lib) => {
-      lib.shelves.forEach((sh) => {
-        sh.items.forEach((it) => {
-          result.push({
-            ...it,
-            libraryName: lib.name,
-            shelfName: sh.name,
-          });
-        });
-      });
-    });
-    return result;
+  // JSON YEDEK YÜKLEME
+  const handleImportJSON = () => {
+    try {
+      const parsed = JSON.parse(jsonInput);
+      if (Array.isArray(parsed)) {
+        setLibraries(parsed);
+        setIsImportModalOpen(false);
+        setJsonInput('');
+        Alert.alert('Başarılı', 'Yedek veriler yüklendi!');
+      } else {
+        Alert.alert('Hata', 'Geçersiz veri formatı!');
+      }
+    } catch {
+      Alert.alert('Hata', 'JSON ayrıştırılamadı!');
+    }
   };
 
-  const filteredSearchItems = getAllItemsWithLocation().filter(
+  const filteredSearchItems = allItems.filter(
       (i) =>
           i.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           i.type.toLowerCase().includes(searchQuery.toLowerCase())
@@ -334,314 +386,371 @@ export default function Index() {
   return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaView style={styles.container}>
-          <View style={styles.mainContent}>
-            <View style={styles.pageBody}>
-              {activeTab === 'library' && (
-                  <View style={styles.tabContent}>
-                    {/* LEVEL 1: Kitaplıklar */}
-                    {!selectedLibrary && (
-                        <>
-                          <View style={styles.headerRow}>
-                            <Text style={styles.title}>🏛️ Kitaplıklar</Text>
-                            <TouchableOpacity
-                                style={styles.addMiniButton}
-                                onPress={() => setModalType('library')}
-                            >
-                              <Text style={styles.addMiniButtonText}>+ Kitaplık Ekle</Text>
-                            </TouchableOpacity>
-                          </View>
+          <PanGestureHandler onGestureEvent={onGestureEventClose} onHandlerStateChange={onGestureEndClose}>
+            <View style={styles.mainContent}>
+              <View style={styles.pageBody}>
+                {/* TAB 1: KİTAPLIKLAR */}
+                {activeTab === 'library' && (
+                    <View style={styles.tabContent}>
+                      {!selectedLibrary && (
+                          <>
+                            <View style={styles.headerRow}>
+                              <Text style={styles.title}>🏛️ Kitaplıklar</Text>
+                              <TouchableOpacity
+                                  style={styles.addMiniButton}
+                                  onPress={() => setModalType('library')}
+                              >
+                                <Text style={styles.addMiniButtonText}>+ Kitaplık Ekle</Text>
+                              </TouchableOpacity>
+                            </View>
 
-                          <FlatList
-                              data={libraries}
-                              keyExtractor={(item) => item.id}
-                              renderItem={({ item }) => (
-                                  <View style={styles.cardRow}>
-                                    <TouchableOpacity
-                                        style={styles.cardMain}
-                                        onPress={() => setSelectedLibrary(item)}
-                                    >
-                                      <Text style={styles.cardTitle}>{item.name}</Text>
-                                      <Text style={styles.cardSubtitle}>
-                                        {item.shelves.length} adet raf var ➔
-                                      </Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.deleteBtn}
-                                        onPress={() => deleteLibrary(item.id)}
-                                    >
-                                      <Text style={styles.deleteBtnText}>🗑️</Text>
-                                    </TouchableOpacity>
-                                  </View>
-                              )}
-                              ListEmptyComponent={
-                                <Text style={styles.emptyText}>Henüz hiç kitaplık eklenmedi.</Text>
-                              }
-                          />
-                        </>
-                    )}
-
-                    {/* LEVEL 2: Raflar */}
-                    {selectedLibrary && !selectedShelf && (
-                        <>
-                          <TouchableOpacity
-                              style={styles.backButton}
-                              onPress={() => setSelectedLibrary(null)}
-                          >
-                            <Text style={styles.backButtonText}>⬅ Kitaplıklara Dön</Text>
-                          </TouchableOpacity>
-
-                          <View style={styles.headerRow}>
-                            <Text style={styles.title}>📂 {selectedLibrary.name}</Text>
-                            <TouchableOpacity
-                                style={styles.addMiniButton}
-                                onPress={() => setModalType('shelf')}
-                            >
-                              <Text style={styles.addMiniButtonText}>+ Raf Ekle</Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          <FlatList
-                              data={selectedLibrary.shelves}
-                              keyExtractor={(item) => item.id}
-                              renderItem={({ item }) => (
-                                  <View style={styles.cardRow}>
-                                    <TouchableOpacity
-                                        style={[styles.cardMain, { borderLeftColor: '#E67E22' }]}
-                                        onPress={() => setSelectedShelf(item)}
-                                    >
-                                      <Text style={styles.cardTitle}>{item.name}</Text>
-                                      <Text style={styles.cardSubtitle}>{item.items.length} öge var ➔</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.deleteBtn}
-                                        onPress={() => deleteShelf(item.id)}
-                                    >
-                                      <Text style={styles.deleteBtnText}>🗑️</Text>
-                                    </TouchableOpacity>
-                                  </View>
-                              )}
-                              ListEmptyComponent={
-                                <Text style={styles.emptyText}>Bu kitaplıkta raf yok.</Text>
-                              }
-                          />
-                        </>
-                    )}
-
-                    {/* LEVEL 3: Ögeler */}
-                    {selectedLibrary && selectedShelf && (
-                        <>
-                          <TouchableOpacity
-                              style={styles.backButton}
-                              onPress={() => setSelectedShelf(null)}
-                          >
-                            <Text style={styles.backButtonText}>⬅ Raflara Dön</Text>
-                          </TouchableOpacity>
-
-                          <View style={styles.headerRow}>
-                            <Text style={styles.title}>📖 {selectedShelf.name}</Text>
-                            <TouchableOpacity
-                                style={styles.addMiniButton}
-                                onPress={() => setModalType('item')}
-                            >
-                              <Text style={styles.addMiniButtonText}>+ Öge Ekle</Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          <FlatList
-                              data={selectedShelf.items}
-                              keyExtractor={(item) => item.id}
-                              renderItem={({ item, index }) => (
-                                  <View style={styles.itemCardRow}>
-                                    <View style={styles.orderActions}>
+                            <FlatList
+                                data={libraries}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item }) => (
+                                    <View style={styles.cardRow}>
                                       <TouchableOpacity
-                                          disabled={index === 0}
-                                          onPress={() => moveItemOrder(item.id, 'up')}
+                                          style={styles.cardMain}
+                                          onPress={() => setSelectedLibrary(item)}
                                       >
-                                        <Text style={[styles.arrowText, index === 0 && styles.disabledText]}>
-                                          ▲
+                                        <Text style={styles.cardTitle}>{item.name}</Text>
+                                        <Text style={styles.cardSubtitle}>
+                                          {item.shelves.length} adet raf var ➔
                                         </Text>
                                       </TouchableOpacity>
-                                      <Text style={styles.orderBadge}>{item.orderNo}</Text>
                                       <TouchableOpacity
-                                          disabled={index === selectedShelf.items.length - 1}
-                                          onPress={() => moveItemOrder(item.id, 'down')}
+                                          style={styles.deleteBtn}
+                                          onPress={() => deleteLibrary(item.id)}
                                       >
-                                        <Text
-                                            style={[
-                                              styles.arrowText,
-                                              index === selectedShelf.items.length - 1 && styles.disabledText,
-                                            ]}
-                                        >
-                                          ▼
-                                        </Text>
+                                        <Text style={styles.deleteBtnText}>🗑️</Text>
                                       </TouchableOpacity>
                                     </View>
+                                )}
+                                ListEmptyComponent={
+                                  <Text style={styles.emptyText}>Henüz hiç kitaplık eklenmedi.</Text>
+                                }
+                            />
+                          </>
+                      )}
 
-                                    <TouchableOpacity
-                                        style={styles.itemCardMain}
-                                        onPress={() => openDetailModal(item)}
-                                    >
-                                      <View style={styles.cardHeader}>
-                                        <Text style={styles.cardTitle}>{item.title}</Text>
-                                        <View style={styles.typeTag}>
-                                          <Text style={styles.typeTagText}>{item.type}</Text>
-                                        </View>
-                                      </View>
-
-                                      <View style={styles.itemMetaRow}>
-                                        <Text style={styles.statusBadge}>{item.status || 'Başlanmadı'}</Text>
-                                        {item.progress ? (
-                                            <Text style={styles.progressText}>📍 {item.progress}</Text>
-                                        ) : null}
-                                      </View>
-
-                                      {item.note ? (
-                                          <Text style={styles.noteSnippet} numberOfLines={1}>
-                                            💬 {item.note}
-                                          </Text>
-                                      ) : null}
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={styles.deleteBtn}
-                                        onPress={() => deleteItem(item.id)}
-                                    >
-                                      <Text style={styles.deleteBtnText}>🗑️</Text>
-                                    </TouchableOpacity>
-                                  </View>
-                              )}
-                              ListEmptyComponent={
-                                <Text style={styles.emptyText}>Bu rafta henüz öge yok.</Text>
-                              }
-                          />
-                        </>
-                    )}
-                  </View>
-              )}
-
-              {/* 🔍 ARAMA EKRANI */}
-              {activeTab === 'search' && (
-                  <View style={styles.tabContent}>
-                    <Text style={styles.title}>🔍 Akıllı Arama</Text>
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="İsim veya Tür arayın..."
-                        placeholderTextColor="#888"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-
-                    <FlatList
-                        data={filteredSearchItems}
-                        keyExtractor={(item) => item.id}
-                        renderItem={({ item }) => (
+                      {selectedLibrary && !selectedShelf && (
+                          <>
                             <TouchableOpacity
-                                style={[styles.cardMain, { marginBottom: 10, borderLeftColor: '#3498DB' }]}
-                                onPress={() => openDetailModal(item)}
+                                style={styles.backButton}
+                                onPress={() => setSelectedLibrary(null)}
                             >
-                              <View style={styles.cardHeader}>
-                                <Text style={styles.cardTitle}>{item.title}</Text>
-                                <View style={styles.typeTag}>
-                                  <Text style={styles.typeTagText}>{item.type}</Text>
-                                </View>
-                              </View>
-                              <Text style={styles.cardSubtitle}>
-                                📍 <Text style={styles.highlight}>{item.libraryName}</Text> ➔{' '}
-                                <Text style={styles.highlight}>{item.shelfName}</Text>'in{' '}
-                                <Text style={styles.highlight}>{item.orderNo}. sırası</Text>
-                              </Text>
+                              <Text style={styles.backButtonText}>⬅ Kitaplıklara Dön</Text>
                             </TouchableOpacity>
-                        )}
-                        ListEmptyComponent={
-                          <Text style={styles.emptyText}>
-                            {searchQuery ? 'Öge bulunamadı.' : 'Arama yapmak için yazın.'}
-                          </Text>
-                        }
-                    />
-                  </View>
-              )}
 
-              {/* ⚙️ AYARLAR EKRANI */}
-              {activeTab === 'settings' && (
-                  <View style={styles.tabContent}>
-                    <Text style={styles.title}>⚙️ Tür Prefab'leri</Text>
-                    <Text style={styles.sectionSubtitle}>Mevcut Öge Türleri:</Text>
+                            <View style={styles.headerRow}>
+                              <Text style={styles.title}>📂 {selectedLibrary.name}</Text>
+                              <TouchableOpacity
+                                  style={styles.addMiniButton}
+                                  onPress={() => setModalType('shelf')}
+                              >
+                                <Text style={styles.addMiniButtonText}>+ Raf Ekle</Text>
+                              </TouchableOpacity>
+                            </View>
 
-                    <View style={styles.typeChipContainer}>
-                      {itemTypes.map((type, idx) => (
-                          <View key={idx} style={styles.typeChip}>
-                            <Text style={styles.typeChipText}>{type}</Text>
+                            <FlatList
+                                data={selectedLibrary.shelves}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item }) => (
+                                    <View style={styles.cardRow}>
+                                      <TouchableOpacity
+                                          style={[styles.cardMain, { borderLeftColor: '#E67E22' }]}
+                                          onPress={() => setSelectedShelf(item)}
+                                      >
+                                        <Text style={styles.cardTitle}>{item.name}</Text>
+                                        <Text style={styles.cardSubtitle}>{item.items.length} öge var ➔</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                          style={styles.deleteBtn}
+                                          onPress={() => deleteShelf(item.id)}
+                                      >
+                                        <Text style={styles.deleteBtnText}>🗑️</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                )}
+                                ListEmptyComponent={
+                                  <Text style={styles.emptyText}>Bu kitaplıkta raf yok.</Text>
+                                }
+                            />
+                          </>
+                      )}
+
+                      {selectedLibrary && selectedShelf && (
+                          <>
+                            <TouchableOpacity
+                                style={styles.backButton}
+                                onPress={() => setSelectedShelf(null)}
+                            >
+                              <Text style={styles.backButtonText}>⬅ Raflara Dön</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.headerRow}>
+                              <Text style={styles.title}>📖 {selectedShelf.name}</Text>
+                              <TouchableOpacity
+                                  style={styles.addMiniButton}
+                                  onPress={() => setModalType('item')}
+                              >
+                                <Text style={styles.addMiniButtonText}>+ Öge Ekle</Text>
+                              </TouchableOpacity>
+                            </View>
+
+                            <FlatList
+                                data={selectedShelf.items}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item, index }) => (
+                                    <View style={styles.itemCardRow}>
+                                      <View style={styles.orderActions}>
+                                        <TouchableOpacity
+                                            disabled={index === 0}
+                                            onPress={() => moveItemOrder(item.id, 'up')}
+                                        >
+                                          <Text style={[styles.arrowText, index === 0 && styles.disabledText]}>
+                                            ▲
+                                          </Text>
+                                        </TouchableOpacity>
+                                        <Text style={styles.orderBadge}>{item.orderNo}</Text>
+                                        <TouchableOpacity
+                                            disabled={index === selectedShelf.items.length - 1}
+                                            onPress={() => moveItemOrder(item.id, 'down')}
+                                        >
+                                          <Text
+                                              style={[
+                                                styles.arrowText,
+                                                index === selectedShelf.items.length - 1 && styles.disabledText,
+                                              ]}
+                                          >
+                                            ▼
+                                          </Text>
+                                        </TouchableOpacity>
+                                      </View>
+
+                                      <TouchableOpacity
+                                          style={styles.itemCardMain}
+                                          onPress={() => openDetailModal(item)}
+                                      >
+                                        <View style={styles.cardHeader}>
+                                          <Text style={styles.cardTitle}>{item.title}</Text>
+                                          <View style={styles.typeTag}>
+                                            <Text style={styles.typeTagText}>{item.type}</Text>
+                                          </View>
+                                        </View>
+
+                                        <View style={styles.itemMetaRow}>
+                                          <Text style={styles.statusBadge}>{item.status || 'Başlanmadı'}</Text>
+                                          {item.progress ? (
+                                              <Text style={styles.progressText}>📍 {item.progress}</Text>
+                                          ) : null}
+                                        </View>
+
+                                        {item.note ? (
+                                            <Text style={styles.noteSnippet} numberOfLines={1}>
+                                              💬 {item.note}
+                                            </Text>
+                                        ) : null}
+                                      </TouchableOpacity>
+
+                                      <TouchableOpacity
+                                          style={styles.deleteBtn}
+                                          onPress={() => deleteItem(item.id)}
+                                      >
+                                        <Text style={styles.deleteBtnText}>🗑️</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                )}
+                                ListEmptyComponent={
+                                  <Text style={styles.emptyText}>Bu rafta henüz öge yok.</Text>
+                                }
+                            />
+                          </>
+                      )}
+                    </View>
+                )}
+
+                {/* TAB 2: ARAMA */}
+                {activeTab === 'search' && (
+                    <View style={styles.tabContent}>
+                      <Text style={styles.title}>🔍 Akıllı Arama</Text>
+                      <TextInput
+                          style={styles.searchInput}
+                          placeholder="İsim veya Tür arayın..."
+                          placeholderTextColor="#888"
+                          value={searchQuery}
+                          onChangeText={setSearchQuery}
+                      />
+
+                      <FlatList
+                          data={filteredSearchItems}
+                          keyExtractor={(item) => item.id}
+                          renderItem={({ item }) => (
+                              <TouchableOpacity
+                                  style={[styles.cardMain, { marginBottom: 10, borderLeftColor: '#3498DB' }]}
+                                  onPress={() => openDetailModal(item)}
+                              >
+                                <View style={styles.cardHeader}>
+                                  <Text style={styles.cardTitle}>{item.title}</Text>
+                                  <View style={styles.typeTag}>
+                                    <Text style={styles.typeTagText}>{item.type}</Text>
+                                  </View>
+                                </View>
+                                <Text style={styles.cardSubtitle}>
+                                  📍 <Text style={styles.highlight}>{item.libraryName}</Text> ➔{' '}
+                                  <Text style={styles.highlight}>{item.shelfName}</Text>'in{' '}
+                                  <Text style={styles.highlight}>{item.orderNo}. sırası</Text>
+                                </Text>
+                              </TouchableOpacity>
+                          )}
+                          ListEmptyComponent={
+                            <Text style={styles.emptyText}>
+                              {searchQuery ? 'Öge bulunamadı.' : 'Arama yapmak için yazın.'}
+                            </Text>
+                          }
+                      />
+                    </View>
+                )}
+
+                {/* TAB 3: İSTATİSTİKLER (DASHBOARD) */}
+                {activeTab === 'stats' && (
+                    <ScrollView style={styles.tabContent}>
+                      <Text style={styles.title}>📊 Koleksiyon İstatistikleri</Text>
+
+                      {/* Özet Kartları */}
+                      <View style={styles.statsGrid}>
+                        <View style={[styles.statCard, { borderTopColor: '#8E44AD' }]}>
+                          <Text style={styles.statNumber}>{totalLibraries}</Text>
+                          <Text style={styles.statLabel}>Kitaplık</Text>
+                        </View>
+                        <View style={[styles.statCard, { borderTopColor: '#E67E22' }]}>
+                          <Text style={styles.statNumber}>{totalShelves}</Text>
+                          <Text style={styles.statLabel}>Raf</Text>
+                        </View>
+                        <View style={[styles.statCard, { borderTopColor: '#2ECC71' }]}>
+                          <Text style={styles.statNumber}>{totalItemsCount}</Text>
+                          <Text style={styles.statLabel}>Toplam Öge</Text>
+                        </View>
+                      </View>
+
+                      {/* İlerleme Barı */}
+                      <View style={styles.progressContainer}>
+                        <Text style={styles.sectionSubtitle}>
+                          Tamamlanma Oranı: %{completionPercentage} ({completedItemsCount}/{totalItemsCount})
+                        </Text>
+                        <View style={styles.progressBarBackground}>
+                          <View style={[styles.progressBarFill, { width: `${completionPercentage}%` }]} />
+                        </View>
+                      </View>
+
+                      {/* Tür Dağılımı */}
+                      <Text style={styles.sectionSubtitle}>Tür Dağılımı:</Text>
+                      {typeCounts.map((tc, idx) => (
+                          <View key={idx} style={styles.typeStatRow}>
+                            <Text style={styles.typeStatName}>{tc.type}</Text>
+                            <Text style={styles.typeStatCount}>{tc.count} adet</Text>
                           </View>
                       ))}
-                    </View>
+                    </ScrollView>
+                )}
 
-                    <View style={styles.addTypeRow}>
-                      <TextInput
-                          style={styles.typeInput}
-                          placeholder="Yeni Tür (Örn: Figür)"
-                          value={newTypeName}
-                          onChangeText={setNewTypeName}
-                      />
-                      <TouchableOpacity style={styles.addTypeBtn} onPress={handleAddType}>
-                        <Text style={styles.addTypeBtnText}>+ Ekle</Text>
+                {/* TAB 4: AYARLAR VE YEDEKLEME */}
+                {activeTab === 'settings' && (
+                    <ScrollView style={styles.tabContent}>
+                      <Text style={styles.title}>⚙️ Ayarlar & Prefab'ler</Text>
+                      <Text style={styles.sectionSubtitle}>Mevcut Öge Türleri:</Text>
+
+                      <View style={styles.typeChipContainer}>
+                        {itemTypes.map((type, idx) => (
+                            <View key={idx} style={styles.typeChip}>
+                              <Text style={styles.typeChipText}>{type}</Text>
+                            </View>
+                        ))}
+                      </View>
+
+                      <View style={styles.addTypeRow}>
+                        <TextInput
+                            style={styles.typeInput}
+                            placeholder="Yeni Tür (Örn: Figür)"
+                            value={newTypeName}
+                            onChangeText={setNewTypeName}
+                        />
+                        <TouchableOpacity style={styles.addTypeBtn} onPress={handleAddType}>
+                          <Text style={styles.addTypeBtnText}>+ Ekle</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <Text style={[styles.sectionSubtitle, { marginTop: 20 }]}>💾 Veri Yedekleme (JSON):</Text>
+                      <TouchableOpacity
+                          style={styles.backupBtn}
+                          onPress={() => setIsImportModalOpen(true)}
+                      >
+                        <Text style={styles.backupBtnText}>📥 JSON Yedek Yükle / Aktar</Text>
                       </TouchableOpacity>
-                    </View>
+                    </ScrollView>
+                )}
+              </View>
 
-                    <TouchableOpacity style={styles.closeCoverButton} onPress={resetCover}>
-                      <Text style={styles.closeCoverText}>📖 Kapağı Kapat</Text>
-                    </TouchableOpacity>
-                  </View>
-              )}
+              {/* SAĞ DİKEY AYRAÇLAR (4 TAB) */}
+              <View style={styles.bookmarkContainer}>
+                <TouchableOpacity
+                    style={[
+                      styles.bookmark,
+                      { backgroundColor: '#E74C3C' },
+                      activeTab === 'library' && styles.activeBookmark,
+                    ]}
+                    onPress={() => setActiveTab('library')}
+                >
+                  <Text style={styles.bookmarkText}>Kitaplık</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[
+                      styles.bookmark,
+                      { backgroundColor: '#3498DB' },
+                      activeTab === 'search' && styles.activeBookmark,
+                    ]}
+                    onPress={() => setActiveTab('search')}
+                >
+                  <Text style={styles.bookmarkText}>Arama</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[
+                      styles.bookmark,
+                      { backgroundColor: '#F39C12' },
+                      activeTab === 'stats' && styles.activeBookmark,
+                    ]}
+                    onPress={() => setActiveTab('stats')}
+                >
+                  <Text style={styles.bookmarkText}>Rapor</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[
+                      styles.bookmark,
+                      { backgroundColor: '#2ECC71' },
+                      activeTab === 'settings' && styles.activeBookmark,
+                    ]}
+                    onPress={() => setActiveTab('settings')}
+                >
+                  <Text style={styles.bookmarkText}>Ayarlar</Text>
+                </TouchableOpacity>
+              </View>
             </View>
+          </PanGestureHandler>
 
-            {/* DİKEY AYRAÇLAR */}
-            <View style={styles.bookmarkContainer}>
-              <TouchableOpacity
-                  style={[
-                    styles.bookmark,
-                    { backgroundColor: '#E74C3C' },
-                    activeTab === 'library' && styles.activeBookmark,
-                  ]}
-                  onPress={() => setActiveTab('library')}
-              >
-                <Text style={styles.bookmarkText}>Kitaplık</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                  style={[
-                    styles.bookmark,
-                    { backgroundColor: '#3498DB' },
-                    activeTab === 'search' && styles.activeBookmark,
-                  ]}
-                  onPress={() => setActiveTab('search')}
-              >
-                <Text style={styles.bookmarkText}>Arama</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                  style={[
-                    styles.bookmark,
-                    { backgroundColor: '#2ECC71' },
-                    activeTab === 'settings' && styles.activeBookmark,
-                  ]}
-                  onPress={() => setActiveTab('settings')}
-              >
-                <Text style={styles.bookmarkText}>Ayarlar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* 3D KAPANAN VE AÇILAN KİTAP KAPAĞI */}
-          {!isBookOpen && (
-              <PanGestureHandler onGestureEvent={onGestureEvent} onEnded={onGestureEnd}>
+          {/* 3D KAPAK */}
+          {(!isBookOpen || dragProgress.value < 1) && (
+              <PanGestureHandler onGestureEvent={onGestureEventOpen} onHandlerStateChange={onGestureEndOpen}>
                 <Animated.View style={[styles.coverOverlay, cover3DAnimatedStyle]}>
                   <Text style={styles.coverTitle}>KİŞİSEL KİTAPLIĞIM</Text>
-                  <Text style={styles.coverInstruction}>◄ Kapağı sola doğru çevirin</Text>
+                  <Text style={styles.coverInstruction}>◄ Kapağı sola çevir / Sağa kaydırıp kapat ►</Text>
                 </Animated.View>
               </PanGestureHandler>
           )}
 
-          {/* DİNAMİK EKLEME MODALI */}
+          {/* MODAL: EKLEME */}
           <Modal visible={!!modalType} animationType="slide" transparent={true}>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContainer}>
@@ -718,7 +827,7 @@ export default function Index() {
             </View>
           </Modal>
 
-          {/* DETAY VE NOT MODALI */}
+          {/* MODAL: DETAY */}
           <Modal visible={!!detailItem} animationType="fade" transparent={true}>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContainer}>
@@ -774,6 +883,39 @@ export default function Index() {
                       onPress={saveItemDetails}
                   >
                     <Text style={styles.modalButtonText}>Kaydet</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* MODAL: JSON IMPORT / YEDEK YÜKLEME */}
+          <Modal visible={isImportModalOpen} animationType="slide" transparent={true}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContainer}>
+                <Text style={styles.modalTitle}>📥 JSON Veri Yükleme</Text>
+                <Text style={styles.label}>Yedek JSON Metnini Buraya Yapıştırın:</Text>
+                <TextInput
+                    style={[styles.modalInput, { height: 100, textAlignVertical: 'top' }]}
+                    placeholder='[{"id":"1", "name":"Kitaplık", ...}]'
+                    multiline={true}
+                    value={jsonInput}
+                    onChangeText={setJsonInput}
+                />
+
+                <View style={styles.modalButtonRow}>
+                  <TouchableOpacity
+                      style={[styles.modalButton, { backgroundColor: '#95A5A6' }]}
+                      onPress={() => setIsImportModalOpen(false)}
+                  >
+                    <Text style={styles.modalButtonText}>İptal</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                      style={[styles.modalButton, { backgroundColor: '#2980B9' }]}
+                      onPress={handleImportJSON}
+                  >
+                    <Text style={styles.modalButtonText}>Yükle</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1035,26 +1177,86 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: 'bold',
   },
-  closeCoverButton: {
-    backgroundColor: '#C0392B',
+  backupBtn: {
+    backgroundColor: '#2980B9',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 10,
   },
-  closeCoverText: {
+  backupBtnText: {
     color: '#FFF',
     fontWeight: 'bold',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  statCard: {
+    flex: 0.31,
+    backgroundColor: '#FFF',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderTopWidth: 4,
+    elevation: 2,
+  },
+  statNumber: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#7F8C8D',
+    marginTop: 4,
+  },
+  progressContainer: {
+    backgroundColor: '#FFF',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  progressBarBackground: {
+    height: 10,
+    backgroundColor: '#ECF0F1',
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#2ECC71',
+  },
+  typeStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF',
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  typeStatName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#34495E',
+  },
+  typeStatCount: {
+    fontSize: 14,
+    color: '#8E44AD',
+    fontWeight: '600',
   },
   bookmarkContainer: {
     width: 55,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 15,
+    gap: 12,
   },
   bookmark: {
     width: 45,
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderTopLeftRadius: 8,
     borderBottomLeftRadius: 8,
     justifyContent: 'center',
