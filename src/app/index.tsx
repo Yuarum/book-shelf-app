@@ -14,7 +14,11 @@ export default function Index() {
   const [isBookOpen, setIsBookOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('library'); // 'library' | 'search' | 'settings'
 
-  // Dinamik Veri Yapısı: Kitaplıklar -> Raflar -> Kitaplar (Sıra Numaralı)
+  // Varsayılan Tür Prefab'leri (Kullanıcı dinamik ekleyebilir)
+  const [itemTypes, setItemTypes] = useState(['Kitap', 'Oyun', 'Dergi', 'Manga']);
+  const [newTypeName, setNewTypeName] = useState('');
+
+  // Dinamik Veri Yapısı: Kitaplıklar -> Raflar -> Ögeler (Kitap/Oyun/vb.)
   const [libraries, setLibraries] = useState([
     {
       id: 'lib-1',
@@ -23,15 +27,15 @@ export default function Index() {
         {
           id: 'shelf-1',
           name: '1. Raf',
-          books: [
-            { id: 'b-1', title: 'Dune', orderNo: '1' },
-            { id: 'b-2', title: '1984', orderNo: '5' },
+          items: [
+            { id: 'i-1', title: 'Dune', type: 'Kitap', orderNo: '1' },
+            { id: 'i-2', title: '1984', type: 'Kitap', orderNo: '5' },
           ],
         },
         {
           id: 'shelf-2',
           name: '2. Raf',
-          books: [{ id: 'b-3', title: 'Simyacı', orderNo: '2' }],
+          items: [{ id: 'i-3', title: 'National Geographic', type: 'Dergi', orderNo: '2' }],
         },
       ],
     },
@@ -42,9 +46,9 @@ export default function Index() {
         {
           id: 'shelf-3',
           name: 'Oyun Rafı',
-          books: [
-            { id: 'b-4', title: 'The Witcher 3', orderNo: '1' },
-            { id: 'b-5', title: 'Elden Ring', orderNo: '2' },
+          items: [
+            { id: 'i-4', title: 'The Witcher 3', type: 'Oyun', orderNo: '1' },
+            { id: 'i-5', title: 'Elden Ring', type: 'Oyun', orderNo: '2' },
           ],
         },
       ],
@@ -56,22 +60,33 @@ export default function Index() {
   const [selectedShelf, setSelectedShelf] = useState(null);
 
   // Modal State'leri
-  const [modalType, setModalType] = useState(null); // 'library' | 'shelf' | 'book'
-  const [newItemName, setNewItemName] = useState('');
-  const [newOrderNo, setNewOrderNo] = useState(''); // Kitap sırası için yeni state
+  const [modalType, setModalType] = useState(null); // 'library' | 'shelf' | 'item'
+  const [newItemTitle, setNewItemTitle] = useState('');
+  const [selectedType, setSelectedType] = useState('Kitap');
+  const [newOrderNo, setNewOrderNo] = useState('');
 
   // Arama State'i
   const [searchQuery, setSearchQuery] = useState('');
 
-  // --- EKLEME FONKSİYONLARI ---
+  // --- YENİ TÜR (PREFAB) EKLEME ---
+  const handleAddType = () => {
+    if (!newTypeName.trim()) return;
+    if (!itemTypes.includes(newTypeName.trim())) {
+      setItemTypes([...itemTypes, newTypeName.trim()]);
+      setSelectedType(newTypeName.trim());
+    }
+    setNewTypeName('');
+  };
+
+  // --- HİYERARŞİK EKLEME FONKSİYONU ---
   const handleAddItem = () => {
-    if (!newItemName.trim()) return;
+    if (!newItemTitle.trim()) return;
 
     if (modalType === 'library') {
-      const newLib = { id: Date.now().toString(), name: newItemName, shelves: [] };
+      const newLib = { id: Date.now().toString(), name: newItemTitle, shelves: [] };
       setLibraries([...libraries, newLib]);
     } else if (modalType === 'shelf' && selectedLibrary) {
-      const newShelf = { id: Date.now().toString(), name: newItemName, books: [] };
+      const newShelf = { id: Date.now().toString(), name: newItemTitle, items: [] };
       const updated = libraries.map((lib) =>
           lib.id === selectedLibrary.id
               ? { ...lib, shelves: [...lib.shelves, newShelf] }
@@ -79,40 +94,42 @@ export default function Index() {
       );
       setLibraries(updated);
       setSelectedLibrary({ ...selectedLibrary, shelves: [...selectedLibrary.shelves, newShelf] });
-    } else if (modalType === 'book' && selectedLibrary && selectedShelf) {
-      const newBook = {
+    } else if (modalType === 'item' && selectedLibrary && selectedShelf) {
+      const newItem = {
         id: Date.now().toString(),
-        title: newItemName,
-        orderNo: newOrderNo.trim() || '1', // Varsayılan 1. kitap
+        title: newItemTitle,
+        type: selectedType,
+        orderNo: newOrderNo.trim() || '1',
       };
       const updated = libraries.map((lib) => {
         if (lib.id === selectedLibrary.id) {
           const updatedShelves = lib.shelves.map((sh) =>
-              sh.id === selectedShelf.id ? { ...sh, books: [...sh.books, newBook] } : sh
+              sh.id === selectedShelf.id ? { ...sh, items: [...sh.items, newItem] } : sh
           );
           return { ...lib, shelves: updatedShelves };
         }
         return lib;
       });
       setLibraries(updated);
-      setSelectedShelf({ ...selectedShelf, books: [...selectedShelf.books, newBook] });
+      setSelectedShelf({ ...selectedShelf, items: [...selectedShelf.items, newItem] });
     }
 
-    setNewItemName('');
+    setNewItemTitle('');
     setNewOrderNo('');
     setModalType(null);
   };
 
   // --- AKILLI ARAMA MANTIGI ---
-  const getAllBooksWithLocation = () => {
+  const getAllItemsWithLocation = () => {
     let result = [];
     libraries.forEach((lib) => {
       lib.shelves.forEach((sh) => {
-        sh.books.forEach((bk) => {
+        sh.items.forEach((it) => {
           result.push({
-            id: bk.id,
-            title: bk.title,
-            orderNo: bk.orderNo,
+            id: it.id,
+            title: it.title,
+            type: it.type,
+            orderNo: it.orderNo,
             libraryName: lib.name,
             shelfName: sh.name,
           });
@@ -122,8 +139,9 @@ export default function Index() {
     return result;
   };
 
-  const filteredSearchBooks = getAllBooksWithLocation().filter((b) =>
-      b.title.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredSearchItems = getAllItemsWithLocation().filter((i) =>
+      i.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      i.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -206,7 +224,7 @@ export default function Index() {
                                     >
                                       <Text style={styles.cardTitle}>{item.name}</Text>
                                       <Text style={styles.cardSubtitle}>
-                                        {item.books.length} adet kitap/oyun var ➔
+                                        {item.items.length} öge var ➔
                                       </Text>
                                     </TouchableOpacity>
                                 )}
@@ -217,7 +235,7 @@ export default function Index() {
                           </>
                       )}
 
-                      {/* LEVEL 3: Kitaplar (Sıra Nolu Gösterim) */}
+                      {/* LEVEL 3: Ögeler (Kitap/Oyun/Manga vb.) */}
                       {selectedLibrary && selectedShelf && (
                           <>
                             <TouchableOpacity
@@ -231,26 +249,31 @@ export default function Index() {
                               <Text style={styles.title}>📖 {selectedShelf.name}</Text>
                               <TouchableOpacity
                                   style={styles.addMiniButton}
-                                  onPress={() => setModalType('book')}
+                                  onPress={() => setModalType('item')}
                               >
-                                <Text style={styles.addMiniButtonText}>+ Kitap/Oyun Ekle</Text>
+                                <Text style={styles.addMiniButtonText}>+ Öge Ekle</Text>
                               </TouchableOpacity>
                             </View>
 
                             <FlatList
-                                data={selectedShelf.books}
+                                data={selectedShelf.items}
                                 keyExtractor={(item) => item.id}
                                 renderItem={({ item }) => (
                                     <View style={[styles.card, { borderLeftColor: '#2ECC71' }]}>
-                                      <Text style={styles.cardTitle}>{item.title}</Text>
+                                      <View style={styles.cardHeader}>
+                                        <Text style={styles.cardTitle}>{item.title}</Text>
+                                        <View style={styles.typeTag}>
+                                          <Text style={styles.typeTagText}>{item.type}</Text>
+                                        </View>
+                                      </View>
                                       <Text style={styles.cardSubtitle}>
-                                        📍 Konum: <Text style={styles.highlight}>{selectedShelf.name}</Text>'in{' '}
-                                        <Text style={styles.highlight}>{item.orderNo}. kitabı</Text>
+                                        📍 <Text style={styles.highlight}>{selectedShelf.name}</Text>'in{' '}
+                                        <Text style={styles.highlight}>{item.orderNo}. sırasındaki ögesi</Text>
                                       </Text>
                                     </View>
                                 )}
                                 ListEmptyComponent={
-                                  <Text style={styles.emptyText}>Bu rafta henüz kitap/oyun yok.</Text>
+                                  <Text style={styles.emptyText}>Bu rafta henüz öge yok.</Text>
                                 }
                             />
                           </>
@@ -264,22 +287,27 @@ export default function Index() {
                       <Text style={styles.title}>🔍 Akıllı Arama</Text>
                       <TextInput
                           style={styles.searchInput}
-                          placeholder="Kitap veya oyun adı arayın..."
+                          placeholder="İsim veya Tür (Örn: Oyun, Dune) yazın..."
                           placeholderTextColor="#888"
                           value={searchQuery}
                           onChangeText={setSearchQuery}
                       />
 
                       <FlatList
-                          data={filteredSearchBooks}
+                          data={filteredSearchItems}
                           keyExtractor={(item) => item.id}
                           renderItem={({ item }) => (
                               <View style={[styles.card, { borderLeftColor: '#3498DB' }]}>
-                                <Text style={styles.cardTitle}>{item.title}</Text>
+                                <View style={styles.cardHeader}>
+                                  <Text style={styles.cardTitle}>{item.title}</Text>
+                                  <View style={styles.typeTag}>
+                                    <Text style={styles.typeTagText}>{item.type}</Text>
+                                  </View>
+                                </View>
                                 <Text style={styles.cardSubtitle}>
                                   📍 <Text style={styles.highlight}>{item.libraryName}</Text> ➔{' '}
                                   <Text style={styles.highlight}>{item.shelfName}</Text>'in{' '}
-                                  <Text style={styles.highlight}>{item.orderNo}. kitabı</Text>
+                                  <Text style={styles.highlight}>{item.orderNo}. sırası</Text>
                                 </Text>
                               </View>
                           )}
@@ -292,10 +320,32 @@ export default function Index() {
                     </View>
                 )}
 
-                {/* ⚙️ AYARLAR EKRANI */}
+                {/* ⚙️ AYARLAR VE PREFAB YÖNETİMİ EKRANI */}
                 {activeTab === 'settings' && (
                     <View style={styles.tabContent}>
-                      <Text style={styles.title}>⚙️ Ayarlar</Text>
+                      <Text style={styles.title}>⚙️ Tür Prefab'leri</Text>
+                      <Text style={styles.sectionSubtitle}>Mevcut Öge Türleri:</Text>
+
+                      <View style={styles.typeChipContainer}>
+                        {itemTypes.map((type, idx) => (
+                            <View key={idx} style={styles.typeChip}>
+                              <Text style={styles.typeChipText}>{type}</Text>
+                            </View>
+                        ))}
+                      </View>
+
+                      <View style={styles.addTypeRow}>
+                        <TextInput
+                            style={styles.typeInput}
+                            placeholder="Yeni Tür (Örn: Figür, Plak)"
+                            value={newTypeName}
+                            onChangeText={setNewTypeName}
+                        />
+                        <TouchableOpacity style={styles.addTypeBtn} onPress={handleAddType}>
+                          <Text style={styles.addTypeBtnText}>+ Ekle</Text>
+                        </TouchableOpacity>
+                      </View>
+
                       <TouchableOpacity
                           style={styles.closeCoverButton}
                           onPress={() => {
@@ -355,7 +405,7 @@ export default function Index() {
               <Text style={styles.modalTitle}>
                 {modalType === 'library' && 'Yeni Kitaplık Oluştur'}
                 {modalType === 'shelf' && 'Yeni Raf Oluştur'}
-                {modalType === 'book' && 'Yeni Kitap / Oyun Ekle'}
+                {modalType === 'item' && 'Yeni Öge Ekle'}
               </Text>
 
               <TextInput
@@ -365,21 +415,46 @@ export default function Index() {
                         ? 'Örn: Salon Kitaplığı'
                         : modalType === 'shelf'
                             ? 'Örn: 1. Raf'
-                            : 'Kitap / Oyun Adı (Örn: 1984)'
+                            : 'Adı (Örn: The Witcher 3)'
                   }
-                  value={newItemName}
-                  onChangeText={setNewItemName}
+                  value={newItemTitle}
+                  onChangeText={setNewItemTitle}
               />
 
-              {/* Sadece Kitap Eklerken Sıra Numarası İnputu Görünür */}
-              {modalType === 'book' && (
-                  <TextInput
-                      style={styles.modalInput}
-                      placeholder="Raftaki Sırası (Örn: 5)"
-                      keyboardType="numeric"
-                      value={newOrderNo}
-                      onChangeText={setNewOrderNo}
-                  />
+              {/* Sadece Öge Eklerken Tür Seçimi ve Sıra No İnputu Görünür */}
+              {modalType === 'item' && (
+                  <>
+                    <Text style={styles.label}>Tür Seçin (Prefab):</Text>
+                    <View style={styles.typeSelectorRow}>
+                      {itemTypes.map((type) => (
+                          <TouchableOpacity
+                              key={type}
+                              style={[
+                                styles.typeSelectBtn,
+                                selectedType === type && styles.typeSelectBtnActive,
+                              ]}
+                              onPress={() => setSelectedType(type)}
+                          >
+                            <Text
+                                style={[
+                                  styles.typeSelectText,
+                                  selectedType === type && styles.typeSelectTextActive,
+                                ]}
+                            >
+                              {type}
+                            </Text>
+                          </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <TextInput
+                        style={styles.modalInput}
+                        placeholder="Raftaki Sırası (Örn: 3)"
+                        keyboardType="numeric"
+                        value={newOrderNo}
+                        onChangeText={setNewOrderNo}
+                    />
+                  </>
               )}
 
               <View style={styles.modalButtonRow}>
@@ -450,6 +525,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  sectionSubtitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#555',
+    marginTop: 10,
+    marginBottom: 8,
+  },
   backButton: {
     marginBottom: 10,
   },
@@ -476,6 +558,11 @@ const styles = StyleSheet.create({
     borderLeftWidth: 5,
     borderLeftColor: '#8E44AD',
   },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   cardTitle: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -484,7 +571,20 @@ const styles = StyleSheet.create({
   cardSubtitle: {
     fontSize: 13,
     color: '#555',
-    marginTop: 4,
+    marginTop: 6,
+  },
+  typeTag: {
+    backgroundColor: '#E8F8F5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#2ECC71',
+  },
+  typeTagText: {
+    fontSize: 11,
+    color: '#27AE60',
+    fontWeight: 'bold',
   },
   searchInput: {
     backgroundColor: '#FFF',
@@ -503,6 +603,47 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#888',
     marginTop: 30,
+  },
+  typeChipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 15,
+  },
+  typeChip: {
+    backgroundColor: '#EAECEE',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  typeChipText: {
+    fontSize: 13,
+    color: '#2C3E50',
+    fontWeight: '600',
+  },
+  addTypeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  typeInput: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  addTypeBtn: {
+    backgroundColor: '#27AE60',
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+    borderRadius: 6,
+  },
+  addTypeBtnText: {
+    color: '#FFF',
+    fontWeight: 'bold',
   },
   closeCoverButton: {
     backgroundColor: '#C0392B',
@@ -556,6 +697,38 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlign: 'center',
     color: '#2C3E50',
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#7F8C8D',
+    marginBottom: 6,
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  typeSelectBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#F2F4F4',
+    borderWidth: 1,
+    borderColor: '#BDC3C7',
+  },
+  typeSelectBtnActive: {
+    backgroundColor: '#8E44AD',
+    borderColor: '#8E44AD',
+  },
+  typeSelectText: {
+    fontSize: 12,
+    color: '#34495E',
+  },
+  typeSelectTextActive: {
+    color: '#FFF',
+    fontWeight: 'bold',
   },
   modalInput: {
     backgroundColor: '#F8F9FA',
