@@ -89,7 +89,6 @@ export default function Index() {
 
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // JSON Import / Export State
   const [jsonInput, setJsonInput] = useState<string>('');
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
 
@@ -174,10 +173,19 @@ export default function Index() {
             shelves: [
               {
                 id: 'shelf-1',
-                name: '1. Raf',
+                name: 'The favorites',
                 items: [
-                  { id: 'i-1', title: 'Dune', type: 'Kitap', orderNo: '1', status: 'Okunuyor/Oynanıyor', progress: 'Sayfa 120', note: 'Harika gidiyor' },
-                  { id: 'i-2', title: '1984', type: 'Kitap', orderNo: '2', status: 'Tamamlandı', progress: '', note: '' },
+                  { id: 'i-1', title: 'The Secret Garden', type: 'Kitap', orderNo: '1', status: 'Okunuyor/Oynanıyor', progress: 'Sayfa 120', note: 'Harika gidiyor' },
+                  { id: 'i-2', title: 'The Great Gatsby', type: 'Kitap', orderNo: '2', status: 'Tamamlandı', progress: '', note: '' },
+                  { id: 'i-3', title: 'Pride & Prejudice', type: 'Kitap', orderNo: '3', status: 'Başlanmadı', progress: '', note: '' },
+                ],
+              },
+              {
+                id: 'shelf-2',
+                name: 'Faraway places',
+                items: [
+                  { id: 'i-4', title: 'The Hobbit', type: 'Kitap', orderNo: '1', status: 'Tamamlandı', progress: '', note: '' },
+                  { id: 'i-5', title: 'A Room with a View', type: 'Kitap', orderNo: '2', status: 'Başlanmadı', progress: '', note: '' },
                 ],
               },
             ],
@@ -360,7 +368,6 @@ export default function Index() {
     setNewTypeName('');
   };
 
-  // JSON YEDEK YÜKLEME
   const handleImportJSON = () => {
     try {
       const parsed = JSON.parse(jsonInput);
@@ -383,6 +390,13 @@ export default function Index() {
           i.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // RAFTAKİ İLK 3 ÖĞEYİ BULDURAN YARDIMCI FONKSİYON
+  const getTop3Items = (items: Item[]) => {
+    return items.slice(0, 3);
+  };
+
+  const bookColors = ['#2D5F4A', '#1E3A5F', '#A84B43', '#8C3B30', '#D9C589'];
+
   return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaView style={styles.container}>
@@ -394,40 +408,89 @@ export default function Index() {
                     <View style={styles.tabContent}>
                       {!selectedLibrary && (
                           <>
+                            <Text style={styles.subHeaderTag}>YOUR PERSONAL COLLECTION</Text>
                             <View style={styles.headerRow}>
-                              <Text style={styles.title}>🏛️ Kitaplıklar</Text>
+                              <Text style={styles.faintTitle}>My Book Shelf</Text>
                               <TouchableOpacity
-                                  style={styles.addMiniButton}
+                                  style={styles.addCircleButton}
                                   onPress={() => setModalType('library')}
                               >
-                                <Text style={styles.addMiniButtonText}>+ Kitaplık Ekle</Text>
+                                <Text style={styles.addCircleButtonText}>+</Text>
                               </TouchableOpacity>
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.searchBarFake}
+                                onPress={() => setActiveTab('search')}
+                            >
+                              <Text style={styles.searchBarPlaceholder}>🔍 Find a book, author, or shelf</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.sectionHeaderRow}>
+                              <Text style={styles.sectionTitle}>Your shelves</Text>
+                              <Text style={styles.sectionMetaText}>
+                                {totalItemsCount} books · {totalShelves} shelves
+                              </Text>
                             </View>
 
                             <FlatList
                                 data={libraries}
                                 keyExtractor={(item) => item.id}
-                                renderItem={({ item }) => (
-                                    <View style={styles.cardRow}>
-                                      <TouchableOpacity
-                                          style={styles.cardMain}
-                                          onPress={() => setSelectedLibrary(item)}
-                                      >
-                                        <Text style={styles.cardTitle}>{item.name}</Text>
-                                        <Text style={styles.cardSubtitle}>
-                                          {item.shelves.length} adet raf var ➔
-                                        </Text>
-                                      </TouchableOpacity>
-                                      <TouchableOpacity
-                                          style={styles.deleteBtn}
-                                          onPress={() => deleteLibrary(item.id)}
-                                      >
-                                        <Text style={styles.deleteBtnText}>🗑️</Text>
-                                      </TouchableOpacity>
-                                    </View>
-                                )}
+                                renderItem={({ item }) => {
+                                  const libItems = item.shelves.flatMap((s) => s.items);
+                                  const top3 = getTop3Items(libItems);
+
+                                  return (
+                                      <View style={styles.cardRow}>
+                                        <TouchableOpacity
+                                            style={styles.cardMain}
+                                            onPress={() => setSelectedLibrary(item)}
+                                        >
+                                          <View style={styles.woodShelfPreview}>
+                                            {top3.length > 0 ? (
+                                                top3.map((it, idx) => (
+                                                    <View
+                                                        key={it.id}
+                                                        style={[
+                                                          styles.bookCoverMock,
+                                                          { backgroundColor: bookColors[idx % bookColors.length] },
+                                                        ]}
+                                                    >
+                                                      <Text style={styles.bookCoverText} numberOfLines={3}>
+                                                        {it.title.toUpperCase()}
+                                                      </Text>
+                                                    </View>
+                                                ))
+                                            ) : (
+                                                <Text style={styles.emptyShelfLabel}>Boş Raf</Text>
+                                            )}
+                                          </View>
+                                          <View style={styles.cardBottomInfo}>
+                                            <Text style={styles.cardTitle}>{item.name}</Text>
+                                            <Text style={styles.cardSubtitle}>
+                                              Shelf A - Row {item.shelves.length} · {libItems.length} books
+                                            </Text>
+                                          </View>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.deleteBtn}
+                                            onPress={() => deleteLibrary(item.id)}
+                                        >
+                                          <Text style={styles.deleteBtnText}>🗑️</Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                  );
+                                }}
                                 ListEmptyComponent={
                                   <Text style={styles.emptyText}>Henüz hiç kitaplık eklenmedi.</Text>
+                                }
+                                ListFooterComponent={
+                                  <TouchableOpacity
+                                      style={styles.makeRoomButton}
+                                      onPress={() => setModalType('library')}
+                                  >
+                                    <Text style={styles.makeRoomButtonText}>+ Make room for another shelf</Text>
+                                  </TouchableOpacity>
                                 }
                             />
                           </>
@@ -436,42 +499,67 @@ export default function Index() {
                       {selectedLibrary && !selectedShelf && (
                           <>
                             <TouchableOpacity
-                                style={styles.backButton}
+                                style={styles.backButtonContainer}
                                 onPress={() => setSelectedLibrary(null)}
                             >
                               <Text style={styles.backButtonText}>⬅ Kitaplıklara Dön</Text>
                             </TouchableOpacity>
 
                             <View style={styles.headerRow}>
-                              <Text style={styles.title}>📂 {selectedLibrary.name}</Text>
+                              <Text style={styles.faintTitle}>{selectedLibrary.name}</Text>
                               <TouchableOpacity
-                                  style={styles.addMiniButton}
+                                  style={styles.addCircleButton}
                                   onPress={() => setModalType('shelf')}
                               >
-                                <Text style={styles.addMiniButtonText}>+ Raf Ekle</Text>
+                                <Text style={styles.addCircleButtonText}>+</Text>
                               </TouchableOpacity>
                             </View>
 
                             <FlatList
                                 data={selectedLibrary.shelves}
                                 keyExtractor={(item) => item.id}
-                                renderItem={({ item }) => (
-                                    <View style={styles.cardRow}>
-                                      <TouchableOpacity
-                                          style={[styles.cardMain, { borderLeftColor: '#E67E22' }]}
-                                          onPress={() => setSelectedShelf(item)}
-                                      >
-                                        <Text style={styles.cardTitle}>{item.name}</Text>
-                                        <Text style={styles.cardSubtitle}>{item.items.length} öge var ➔</Text>
-                                      </TouchableOpacity>
-                                      <TouchableOpacity
-                                          style={styles.deleteBtn}
-                                          onPress={() => deleteShelf(item.id)}
-                                      >
-                                        <Text style={styles.deleteBtnText}>🗑️</Text>
-                                      </TouchableOpacity>
-                                    </View>
-                                )}
+                                renderItem={({ item }) => {
+                                  const top3 = getTop3Items(item.items);
+
+                                  return (
+                                      <View style={styles.cardRow}>
+                                        <TouchableOpacity
+                                            style={styles.cardMain}
+                                            onPress={() => setSelectedShelf(item)}
+                                        >
+                                          <View style={styles.woodShelfPreview}>
+                                            {top3.length > 0 ? (
+                                                top3.map((it, idx) => (
+                                                    <View
+                                                        key={it.id}
+                                                        style={[
+                                                          styles.bookCoverMock,
+                                                          { backgroundColor: bookColors[(idx + 1) % bookColors.length] },
+                                                        ]}
+                                                    >
+                                                      <Text style={styles.bookCoverText} numberOfLines={3}>
+                                                        {it.title.toUpperCase()}
+                                                      </Text>
+                                                    </View>
+                                                ))
+                                            ) : (
+                                                <Text style={styles.emptyShelfLabel}>Boş Raf</Text>
+                                            )}
+                                          </View>
+                                          <View style={styles.cardBottomInfo}>
+                                            <Text style={styles.cardTitle}>{item.name}</Text>
+                                            <Text style={styles.cardSubtitle}>{item.items.length} books</Text>
+                                          </View>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.deleteBtn}
+                                            onPress={() => deleteShelf(item.id)}
+                                        >
+                                          <Text style={styles.deleteBtnText}>🗑️</Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                  );
+                                }}
                                 ListEmptyComponent={
                                   <Text style={styles.emptyText}>Bu kitaplıkta raf yok.</Text>
                                 }
@@ -482,19 +570,19 @@ export default function Index() {
                       {selectedLibrary && selectedShelf && (
                           <>
                             <TouchableOpacity
-                                style={styles.backButton}
+                                style={styles.backButtonContainer}
                                 onPress={() => setSelectedShelf(null)}
                             >
                               <Text style={styles.backButtonText}>⬅ Raflara Dön</Text>
                             </TouchableOpacity>
 
                             <View style={styles.headerRow}>
-                              <Text style={styles.title}>📖 {selectedShelf.name}</Text>
+                              <Text style={styles.faintTitle}>{selectedShelf.name}</Text>
                               <TouchableOpacity
-                                  style={styles.addMiniButton}
+                                  style={styles.addCircleButton}
                                   onPress={() => setModalType('item')}
                               >
-                                <Text style={styles.addMiniButtonText}>+ Öge Ekle</Text>
+                                <Text style={styles.addCircleButtonText}>+</Text>
                               </TouchableOpacity>
                             </View>
 
@@ -533,7 +621,7 @@ export default function Index() {
                                           onPress={() => openDetailModal(item)}
                                       >
                                         <View style={styles.cardHeader}>
-                                          <Text style={styles.cardTitle}>{item.title}</Text>
+                                          <Text style={styles.itemTitleText}>{item.title}</Text>
                                           <View style={styles.typeTag}>
                                             <Text style={styles.typeTagText}>{item.type}</Text>
                                           </View>
@@ -573,11 +661,11 @@ export default function Index() {
                 {/* TAB 2: ARAMA */}
                 {activeTab === 'search' && (
                     <View style={styles.tabContent}>
-                      <Text style={styles.title}>🔍 Akıllı Arama</Text>
+                      <Text style={styles.faintTitle}>Arama</Text>
                       <TextInput
                           style={styles.searchInput}
-                          placeholder="İsim veya Tür arayın..."
-                          placeholderTextColor="#888"
+                          placeholder="Find a book, author, or shelf..."
+                          placeholderTextColor="#A89A8B"
                           value={searchQuery}
                           onChangeText={setSearchQuery}
                       />
@@ -587,11 +675,11 @@ export default function Index() {
                           keyExtractor={(item) => item.id}
                           renderItem={({ item }) => (
                               <TouchableOpacity
-                                  style={[styles.cardMain, { marginBottom: 10, borderLeftColor: '#3498DB' }]}
+                                  style={[styles.cardMain, { marginBottom: 10 }]}
                                   onPress={() => openDetailModal(item)}
                               >
                                 <View style={styles.cardHeader}>
-                                  <Text style={styles.cardTitle}>{item.title}</Text>
+                                  <Text style={styles.itemTitleText}>{item.title}</Text>
                                   <View style={styles.typeTag}>
                                     <Text style={styles.typeTagText}>{item.type}</Text>
                                   </View>
@@ -612,30 +700,28 @@ export default function Index() {
                     </View>
                 )}
 
-                {/* TAB 3: İSTATİSTİKLER (DASHBOARD) */}
+                {/* TAB 3: İSTATİSTİKLER */}
                 {activeTab === 'stats' && (
                     <ScrollView style={styles.tabContent}>
-                      <Text style={styles.title}>📊 Koleksiyon İstatistikleri</Text>
+                      <Text style={styles.faintTitle}>Raporlar</Text>
 
-                      {/* Özet Kartları */}
                       <View style={styles.statsGrid}>
-                        <View style={[styles.statCard, { borderTopColor: '#8E44AD' }]}>
+                        <View style={styles.statCard}>
                           <Text style={styles.statNumber}>{totalLibraries}</Text>
                           <Text style={styles.statLabel}>Kitaplık</Text>
                         </View>
-                        <View style={[styles.statCard, { borderTopColor: '#E67E22' }]}>
+                        <View style={styles.statCard}>
                           <Text style={styles.statNumber}>{totalShelves}</Text>
                           <Text style={styles.statLabel}>Raf</Text>
                         </View>
-                        <View style={[styles.statCard, { borderTopColor: '#2ECC71' }]}>
+                        <View style={styles.statCard}>
                           <Text style={styles.statNumber}>{totalItemsCount}</Text>
                           <Text style={styles.statLabel}>Toplam Öge</Text>
                         </View>
                       </View>
 
-                      {/* İlerleme Barı */}
                       <View style={styles.progressContainer}>
-                        <Text style={styles.sectionSubtitle}>
+                        <Text style={styles.sectionSubtitleText}>
                           Tamamlanma Oranı: %{completionPercentage} ({completedItemsCount}/{totalItemsCount})
                         </Text>
                         <View style={styles.progressBarBackground}>
@@ -643,8 +729,7 @@ export default function Index() {
                         </View>
                       </View>
 
-                      {/* Tür Dağılımı */}
-                      <Text style={styles.sectionSubtitle}>Tür Dağılımı:</Text>
+                      <Text style={styles.sectionSubtitleText}>Tür Dağılımı:</Text>
                       {typeCounts.map((tc, idx) => (
                           <View key={idx} style={styles.typeStatRow}>
                             <Text style={styles.typeStatName}>{tc.type}</Text>
@@ -654,11 +739,11 @@ export default function Index() {
                     </ScrollView>
                 )}
 
-                {/* TAB 4: AYARLAR VE YEDEKLEME */}
+                {/* TAB 4: AYARLAR */}
                 {activeTab === 'settings' && (
                     <ScrollView style={styles.tabContent}>
-                      <Text style={styles.title}>⚙️ Ayarlar & Prefab'ler</Text>
-                      <Text style={styles.sectionSubtitle}>Mevcut Öge Türleri:</Text>
+                      <Text style={styles.faintTitle}>Ayarlar</Text>
+                      <Text style={styles.sectionSubtitleText}>Mevcut Öge Türleri:</Text>
 
                       <View style={styles.typeChipContainer}>
                         {itemTypes.map((type, idx) => (
@@ -672,6 +757,7 @@ export default function Index() {
                         <TextInput
                             style={styles.typeInput}
                             placeholder="Yeni Tür (Örn: Figür)"
+                            placeholderTextColor="#A89A8B"
                             value={newTypeName}
                             onChangeText={setNewTypeName}
                         />
@@ -680,7 +766,7 @@ export default function Index() {
                         </TouchableOpacity>
                       </View>
 
-                      <Text style={[styles.sectionSubtitle, { marginTop: 20 }]}>💾 Veri Yedekleme (JSON):</Text>
+                      <Text style={[styles.sectionSubtitleText, { marginTop: 20 }]}>💾 Veri Yedekleme (JSON):</Text>
                       <TouchableOpacity
                           style={styles.backupBtn}
                           onPress={() => setIsImportModalOpen(true)}
@@ -691,61 +777,68 @@ export default function Index() {
                 )}
               </View>
 
-              {/* SAĞ DİKEY AYRAÇLAR (4 TAB) */}
+              {/* DİKEY AYRAÇLAR (FIGMA RENKLERİ) */}
               <View style={styles.bookmarkContainer}>
                 <TouchableOpacity
                     style={[
                       styles.bookmark,
-                      { backgroundColor: '#E74C3C' },
+                      { backgroundColor: '#9E4743' },
                       activeTab === 'library' && styles.activeBookmark,
                     ]}
                     onPress={() => setActiveTab('library')}
                 >
-                  <Text style={styles.bookmarkText}>Kitaplık</Text>
+                  <Text style={styles.bookmarkText}>Library</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                     style={[
                       styles.bookmark,
-                      { backgroundColor: '#3498DB' },
+                      { backgroundColor: '#4A769B' },
                       activeTab === 'search' && styles.activeBookmark,
                     ]}
                     onPress={() => setActiveTab('search')}
                 >
-                  <Text style={styles.bookmarkText}>Arama</Text>
+                  <Text style={styles.bookmarkText}>Search</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                     style={[
                       styles.bookmark,
-                      { backgroundColor: '#F39C12' },
-                      activeTab === 'stats' && styles.activeBookmark,
-                    ]}
-                    onPress={() => setActiveTab('stats')}
-                >
-                  <Text style={styles.bookmarkText}>Rapor</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[
-                      styles.bookmark,
-                      { backgroundColor: '#2ECC71' },
+                      { backgroundColor: '#5C785B' },
                       activeTab === 'settings' && styles.activeBookmark,
                     ]}
                     onPress={() => setActiveTab('settings')}
                 >
-                  <Text style={styles.bookmarkText}>Ayarlar</Text>
+                  <Text style={styles.bookmarkText}>Settings</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </PanGestureHandler>
 
-          {/* 3D KAPAK */}
+          {/* 3D KAPAK (FIGMA BİREBİR TASARIMI) */}
           {(!isBookOpen || dragProgress.value < 1) && (
               <PanGestureHandler onGestureEvent={onGestureEventOpen} onHandlerStateChange={onGestureEndOpen}>
                 <Animated.View style={[styles.coverOverlay, cover3DAnimatedStyle]}>
-                  <Text style={styles.coverTitle}>KİŞİSEL KİTAPLIĞIM</Text>
-                  <Text style={styles.coverInstruction}>◄ Kapağı sola çevir / Sağa kaydırıp kapat ►</Text>
+                  <View style={styles.coverInnerFrame}>
+                    <Text style={styles.coverSubTag}>A PERSONAL COLLECTION</Text>
+
+                    <Text style={styles.coverBookIcon}>📖</Text>
+
+                    <Text style={styles.coverMainTitle}>MY{'\n'}LIBRARY</Text>
+
+                    <View style={styles.coverDivider} />
+
+                    <Text style={styles.coverItalicQuote}>
+                      A place for every book.{'\n'}A story on every shelf.
+                    </Text>
+
+                    <View style={styles.coverFooterHint}>
+                      <Text style={styles.coverArrow}>←</Text>
+                      <Text style={styles.coverSwipeText}>SWIPE LEFT TO OPEN</Text>
+                    </View>
+
+                    <Text style={styles.coverBrandText}>My Book Shelf</Text>
+                  </View>
                 </Animated.View>
               </PanGestureHandler>
           )}
@@ -817,7 +910,7 @@ export default function Index() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                      style={[styles.modalButton, { backgroundColor: '#2ECC71' }]}
+                      style={[styles.modalButton, { backgroundColor: '#B89252' }]}
                       onPress={handleAddItem}
                   >
                     <Text style={styles.modalButtonText}>Ekle</Text>
@@ -879,7 +972,7 @@ export default function Index() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                      style={[styles.modalButton, { backgroundColor: '#2ECC71' }]}
+                      style={[styles.modalButton, { backgroundColor: '#B89252' }]}
                       onPress={saveItemDetails}
                   >
                     <Text style={styles.modalButtonText}>Kaydet</Text>
@@ -889,7 +982,7 @@ export default function Index() {
             </View>
           </Modal>
 
-          {/* MODAL: JSON IMPORT / YEDEK YÜKLEME */}
+          {/* MODAL: JSON IMPORT */}
           <Modal visible={isImportModalOpen} animationType="slide" transparent={true}>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContainer}>
@@ -912,7 +1005,7 @@ export default function Index() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                      style={[styles.modalButton, { backgroundColor: '#2980B9' }]}
+                      style={[styles.modalButton, { backgroundColor: '#1E2D3B' }]}
                       onPress={handleImportJSON}
                   >
                     <Text style={styles.modalButtonText}>Yükle</Text>
@@ -929,7 +1022,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EBE0',
+    backgroundColor: '#F5EFEB',
   },
   coverOverlay: {
     position: 'absolute',
@@ -937,25 +1030,73 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#2C3E50',
+    backgroundColor: '#1E2D3B',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
-    elevation: 10,
-    borderRightWidth: 4,
-    borderRightColor: '#F1C40F',
+    padding: 25,
   },
-  coverTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#F1C40F',
+  coverInnerFrame: {
+    flex: 1,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#B89252',
+    borderRadius: 8,
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  coverSubTag: {
+    fontSize: 11,
+    color: '#B89252',
     letterSpacing: 2,
-    marginBottom: 20,
+    fontWeight: '600',
+    marginTop: 20,
   },
-  coverInstruction: {
-    fontSize: 14,
-    color: '#BDC3C7',
+  coverBookIcon: {
+    fontSize: 42,
+    color: '#B89252',
+  },
+  coverMainTitle: {
+    fontSize: 34,
+    color: '#B89252',
+    textAlign: 'center',
+    letterSpacing: 4,
+    fontWeight: '300',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+  },
+  coverDivider: {
+    width: 40,
+    height: 1,
+    backgroundColor: '#B89252',
+  },
+  coverItalicQuote: {
+    fontSize: 15,
+    color: '#D1C2A5',
+    textAlign: 'center',
     fontStyle: 'italic',
+    lineHeight: 22,
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+  },
+  coverFooterHint: {
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  coverArrow: {
+    fontSize: 18,
+    color: '#B89252',
+    marginBottom: 4,
+  },
+  coverSwipeText: {
+    fontSize: 11,
+    color: '#B89252',
+    letterSpacing: 2,
+    fontWeight: '600',
+  },
+  coverBrandText: {
+    fontSize: 13,
+    color: '#B89252',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
   mainContent: {
     flex: 1,
@@ -963,64 +1104,136 @@ const styles = StyleSheet.create({
   },
   pageBody: {
     flex: 1,
-    padding: 15,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 35 : 15,
   },
   tabContent: {
     flex: 1,
-    marginTop: 10,
+  },
+  subHeaderTag: {
+    fontSize: 10,
+    color: '#B89252',
+    fontWeight: 'bold',
+    letterSpacing: 1.5,
+    marginBottom: 4,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 15,
+    marginTop: 5,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+  faintTitle: {
+    fontSize: 26,
+    color: '#2C221E',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
-  sectionSubtitle: {
+  addCircleButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1E2D3B',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addCircleButtonText: {
+    color: '#F5EFEB',
+    fontSize: 22,
+    fontWeight: '300',
+  },
+  searchBarFake: {
+    backgroundColor: '#EFE8E1',
+    borderWidth: 1,
+    borderColor: '#E2D7CB',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  searchBarPlaceholder: {
+    color: '#A89A8B',
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#555',
-    marginTop: 10,
-    marginBottom: 8,
   },
-  backButton: {
-    marginBottom: 10,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 12,
   },
-  backButtonText: {
-    color: '#2980B9',
-    fontWeight: 'bold',
+  sectionTitle: {
+    fontSize: 20,
+    color: '#2C221E',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
-  addMiniButton: {
-    backgroundColor: '#8E44AD',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  addMiniButtonText: {
-    color: '#FFF',
-    fontWeight: 'bold',
+  sectionMetaText: {
     fontSize: 12,
+    color: '#8C7E72',
   },
   cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    gap: 8,
+    marginBottom: 15,
+    gap: 10,
   },
   cardMain: {
     flex: 1,
     backgroundColor: '#FFF',
-    padding: 15,
-    borderRadius: 8,
-    borderLeftWidth: 5,
-    borderLeftColor: '#8E44AD',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E8DFD5',
+    elevation: 2,
+  },
+  woodShelfPreview: {
+    height: 110,
+    backgroundColor: '#6E4729',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    paddingHorizontal: 15,
+    paddingBottom: 6,
+    borderBottomWidth: 6,
+    borderBottomColor: '#4A2E17',
+  },
+  emptyShelfLabel: {
+    color: '#D1C2A5',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginBottom: 20,
+  },
+  bookCoverMock: {
+    width: 65,
+    height: 90,
+    borderRadius: 3,
+    padding: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+  },
+  bookCoverText: {
+    color: '#FFF',
+    fontSize: 8,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 10,
+  },
+  cardBottomInfo: {
+    padding: 14,
+    backgroundColor: '#FFFCF7',
+  },
+  cardTitle: {
+    fontSize: 16,
+    color: '#2C221E',
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: '#8C7E72',
+    marginTop: 3,
   },
   deleteBtn: {
-    backgroundColor: '#FDEDEC',
+    backgroundColor: '#FADBD8',
     padding: 12,
     borderRadius: 8,
     justifyContent: 'center',
@@ -1028,6 +1241,21 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     fontSize: 16,
+  },
+  makeRoomButton: {
+    borderWidth: 1,
+    borderColor: '#B89252',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  makeRoomButtonText: {
+    color: '#B89252',
+    fontSize: 14,
+    fontWeight: '600',
   },
   itemCardRow: {
     flexDirection: 'row',
@@ -1040,30 +1268,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFF',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 6,
   },
   arrowText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#2980B9',
+    color: '#1E2D3B',
   },
   disabledText: {
-    color: '#BDC3C7',
+    color: '#D5C9BD',
   },
   orderBadge: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#2C3E50',
+    color: '#2C221E',
     marginVertical: 2,
   },
   itemCardMain: {
     flex: 1,
-    backgroundColor: '#FFF',
-    padding: 12,
+    backgroundColor: '#FFFCF7',
+    padding: 14,
     borderRadius: 8,
-    borderLeftWidth: 5,
-    borderLeftColor: '#2ECC71',
+    borderWidth: 1,
+    borderColor: '#E8DFD5',
+  },
+  itemTitleText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#2C221E',
   },
   itemMetaRow: {
     flexDirection: 'row',
@@ -1073,8 +1306,8 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     fontSize: 11,
-    backgroundColor: '#EAECEE',
-    color: '#34495E',
+    backgroundColor: '#EFE8E1',
+    color: '#5C4E43',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1082,11 +1315,11 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 11,
-    color: '#7F8C8D',
+    color: '#8C7E72',
   },
   noteSnippet: {
     fontSize: 11,
-    color: '#8E44AD',
+    color: '#B89252',
     fontStyle: 'italic',
     marginTop: 4,
   },
@@ -1095,27 +1328,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: '#555',
-    marginTop: 4,
-  },
   typeTag: {
-    backgroundColor: '#E8F8F5',
+    backgroundColor: '#F5EFEB',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#2ECC71',
+    borderColor: '#B89252',
   },
   typeTagText: {
     fontSize: 11,
-    color: '#27AE60',
+    color: '#B89252',
     fontWeight: 'bold',
   },
   searchInput: {
@@ -1123,17 +1346,17 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#DDD',
+    borderColor: '#E2D7CB',
     fontSize: 15,
     marginBottom: 15,
   },
   highlight: {
     fontWeight: 'bold',
-    color: '#2980B9',
+    color: '#1E2D3B',
   },
   emptyText: {
     textAlign: 'center',
-    color: '#888',
+    color: '#8C7E72',
     marginTop: 30,
   },
   typeChipContainer: {
@@ -1143,14 +1366,14 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   typeChip: {
-    backgroundColor: '#EAECEE',
+    backgroundColor: '#EFE8E1',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
   },
   typeChipText: {
     fontSize: 13,
-    color: '#2C3E50',
+    color: '#2C221E',
     fontWeight: '600',
   },
   addTypeRow: {
@@ -1162,13 +1385,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#DDD',
+    borderColor: '#E2D7CB',
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   addTypeBtn: {
-    backgroundColor: '#27AE60',
+    backgroundColor: '#1E2D3B',
     justifyContent: 'center',
     paddingHorizontal: 15,
     borderRadius: 6,
@@ -1178,15 +1401,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   backupBtn: {
-    backgroundColor: '#2980B9',
+    backgroundColor: '#1E2D3B',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 10,
   },
   backupBtnText: {
-    color: '#FFF',
+    color: '#F5EFEB',
     fontWeight: 'bold',
+  },
+  sectionSubtitleText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2C221E',
+    marginTop: 10,
+    marginBottom: 8,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -1196,74 +1426,80 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 0.31,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFCF7',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    borderTopWidth: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E8DFD5',
   },
   statNumber: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#2C3E50',
+    color: '#2C221E',
   },
   statLabel: {
     fontSize: 11,
-    color: '#7F8C8D',
+    color: '#8C7E72',
     marginTop: 4,
   },
   progressContainer: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFCF7',
     padding: 15,
     borderRadius: 8,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E8DFD5',
   },
   progressBarBackground: {
     height: 10,
-    backgroundColor: '#ECF0F1',
+    backgroundColor: '#EFE8E1',
     borderRadius: 5,
     overflow: 'hidden',
     marginTop: 8,
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#2ECC71',
+    backgroundColor: '#B89252',
   },
   typeStatRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFCF7',
     padding: 12,
     borderRadius: 6,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E8DFD5',
   },
   typeStatName: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#34495E',
+    color: '#2C221E',
   },
   typeStatCount: {
     fontSize: 14,
-    color: '#8E44AD',
+    color: '#B89252',
     fontWeight: '600',
   },
   bookmarkContainer: {
-    width: 55,
-    justifyContent: 'center',
+    width: 48,
+    justifyContent: 'flex-start',
+    paddingTop: 80,
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
   },
   bookmark: {
-    width: 45,
-    paddingVertical: 16,
+    width: 42,
+    paddingVertical: 18,
     borderTopLeftRadius: 8,
     borderBottomLeftRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 3,
   },
   activeBookmark: {
-    width: 55,
+    width: 52,
   },
   bookmarkText: {
     color: '#FFF',
@@ -1279,21 +1515,23 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: '85%',
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFCF7',
     borderRadius: 12,
     padding: 20,
+    borderWidth: 1,
+    borderColor: '#E8DFD5',
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: 'bold',
     marginBottom: 12,
     textAlign: 'center',
-    color: '#2C3E50',
+    color: '#2C221E',
   },
   label: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#7F8C8D',
+    color: '#8C7E72',
     marginBottom: 6,
     marginTop: 4,
   },
@@ -1307,26 +1545,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
-    backgroundColor: '#F2F4F4',
+    backgroundColor: '#EFE8E1',
     borderWidth: 1,
-    borderColor: '#BDC3C7',
+    borderColor: '#E2D7CB',
   },
   typeSelectBtnActive: {
-    backgroundColor: '#8E44AD',
-    borderColor: '#8E44AD',
+    backgroundColor: '#1E2D3B',
+    borderColor: '#1E2D3B',
   },
   typeSelectText: {
     fontSize: 11,
-    color: '#34495E',
+    color: '#2C221E',
   },
   typeSelectTextActive: {
     color: '#FFF',
     fontWeight: 'bold',
   },
   modalInput: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#DDD',
+    borderColor: '#E2D7CB',
     borderRadius: 6,
     padding: 10,
     marginBottom: 10,
@@ -1346,5 +1584,19 @@ const styles = StyleSheet.create({
   modalButtonText: {
     color: '#FFF',
     fontWeight: 'bold',
+  },
+  backButtonContainer: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#EFE8E1',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    marginTop: 5,
+  },
+  backButtonText: {
+    color: '#1E2D3B',
+    fontWeight: 'bold',
+    fontSize: 13,
   },
 });
