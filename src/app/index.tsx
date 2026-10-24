@@ -14,6 +14,7 @@ import {
   UIManager,
   ScrollView,
   Alert,
+  Switch,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -35,6 +36,10 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STORAGE_KEY = '@book_shelf_data_v1';
 const TYPES_KEY = '@book_shelf_types_v1';
+const THEME_KEY = '@book_shelf_theme_v1';
+const GOALS_KEY = '@book_shelf_goals_v1';
+
+export const BOOK_COLORS = ['#2D5F4A', '#1E3A5F', '#A84B43', '#8C3B30', '#D9C589', '#5B3E6A', '#2C3E50'];
 
 export interface Item {
   id: string;
@@ -44,6 +49,7 @@ export interface Item {
   status?: string;
   progress?: string;
   note?: string;
+  coverColor?: string;
 }
 
 export interface Shelf {
@@ -63,10 +69,20 @@ export interface SearchItem extends Item {
   shelfName: string;
 }
 
+export interface PlannerGoals {
+  dailyPageTarget: string;
+  dailyPageCurrent: string;
+  weeklyTarget: string;
+  weeklyCurrent: string;
+  monthlyTarget: string;
+  monthlyCurrent: string;
+}
+
 export default function Index() {
   const [isBookOpen, setIsBookOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'library' | 'search' | 'stats' | 'settings'>('library');
 
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const dragProgress = useSharedValue<number>(0);
 
   const [itemTypes, setItemTypes] = useState<string[]>(['Kitap', 'Oyun', 'Dergi', 'Manga']);
@@ -81,13 +97,24 @@ export default function Index() {
   const [newItemTitle, setNewItemTitle] = useState<string>('');
   const [selectedType, setSelectedType] = useState<string>('Kitap');
   const [newOrderNo, setNewOrderNo] = useState<string>('');
+  const [selectedCoverColor, setSelectedCoverColor] = useState<string>(BOOK_COLORS[0]);
 
   const [detailItem, setDetailItem] = useState<Item | null>(null);
   const [editStatus, setEditStatus] = useState<string>('Başlanmadı');
   const [editProgress, setEditProgress] = useState<string>('');
   const [editNote, setEditNote] = useState<string>('');
+  const [editCoverColor, setEditCoverColor] = useState<string>(BOOK_COLORS[0]);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const [goals, setGoals] = useState<PlannerGoals>({
+    dailyPageTarget: '30',
+    dailyPageCurrent: '0',
+    weeklyTarget: '1',
+    weeklyCurrent: '0',
+    monthlyTarget: '3',
+    monthlyCurrent: '0',
+  });
 
   const [jsonInput, setJsonInput] = useState<string>('');
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
@@ -156,16 +183,17 @@ export default function Index() {
 
   useEffect(() => {
     saveData();
-  }, [libraries, itemTypes]);
+  }, [libraries, itemTypes, isDarkMode, goals]);
 
   const loadData = async () => {
     try {
       const savedLibs = await AsyncStorage.getItem(STORAGE_KEY);
       const savedTypes = await AsyncStorage.getItem(TYPES_KEY);
+      const savedTheme = await AsyncStorage.getItem(THEME_KEY);
+      const savedGoals = await AsyncStorage.getItem(GOALS_KEY);
 
-      if (savedLibs) {
-        setLibraries(JSON.parse(savedLibs) as Library[]);
-      } else {
+      if (savedLibs) setLibraries(JSON.parse(savedLibs) as Library[]);
+      else {
         setLibraries([
           {
             id: 'lib-1',
@@ -175,17 +203,9 @@ export default function Index() {
                 id: 'shelf-1',
                 name: 'The favorites',
                 items: [
-                  { id: 'i-1', title: 'The Secret Garden', type: 'Kitap', orderNo: '1', status: 'Okunuyor/Oynanıyor', progress: 'Sayfa 120', note: 'Harika gidiyor' },
-                  { id: 'i-2', title: 'The Great Gatsby', type: 'Kitap', orderNo: '2', status: 'Tamamlandı', progress: '', note: '' },
-                  { id: 'i-3', title: 'Pride & Prejudice', type: 'Kitap', orderNo: '3', status: 'Başlanmadı', progress: '', note: '' },
-                ],
-              },
-              {
-                id: 'shelf-2',
-                name: 'Faraway places',
-                items: [
-                  { id: 'i-4', title: 'The Hobbit', type: 'Kitap', orderNo: '1', status: 'Tamamlandı', progress: '', note: '' },
-                  { id: 'i-5', title: 'A Room with a View', type: 'Kitap', orderNo: '2', status: 'Başlanmadı', progress: '', note: '' },
+                  { id: 'i-1', title: 'The Secret Garden', type: 'Kitap', orderNo: '1', status: 'Okunuyor/Oynanıyor', progress: 'Sayfa 120', note: 'Harika gidiyor', coverColor: BOOK_COLORS[0] },
+                  { id: 'i-2', title: 'The Great Gatsby', type: 'Kitap', orderNo: '2', status: 'Tamamlandı', progress: '', note: '', coverColor: BOOK_COLORS[1] },
+                  { id: 'i-3', title: 'Pride & Prejudice', type: 'Kitap', orderNo: '3', status: 'Başlanmadı', progress: '', note: '', coverColor: BOOK_COLORS[2] },
                 ],
               },
             ],
@@ -194,6 +214,8 @@ export default function Index() {
       }
 
       if (savedTypes) setItemTypes(JSON.parse(savedTypes) as string[]);
+      if (savedTheme) setIsDarkMode(JSON.parse(savedTheme) as boolean);
+      if (savedGoals) setGoals(JSON.parse(savedGoals) as PlannerGoals);
     } catch (e) {
       console.error('Veri yükleme hatası:', e);
     }
@@ -203,12 +225,26 @@ export default function Index() {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(libraries));
       await AsyncStorage.setItem(TYPES_KEY, JSON.stringify(itemTypes));
+      await AsyncStorage.setItem(THEME_KEY, JSON.stringify(isDarkMode));
+      await AsyncStorage.setItem(GOALS_KEY, JSON.stringify(goals));
     } catch (e) {
       console.error('Veri kaydetme hatası:', e);
     }
   };
 
-  // --- 3. İSTATİSTİK HESAPLAMALARI ---
+  // --- 3. DİNAMİK TEMA DOKUSU ---
+  const currentTheme = {
+    bg: isDarkMode ? '#121A21' : '#F5EFEB',
+    cardBg: isDarkMode ? '#1E2833' : '#FFFCF7',
+    textColor: isDarkMode ? '#E1D9CE' : '#2C221E',
+    subTextColor: isDarkMode ? '#92A1B0' : '#8C7E72',
+    accentColor: '#B89252',
+    border: isDarkMode ? '#2D3A48' : '#E8DFD5',
+    inputBg: isDarkMode ? '#16212B' : '#EFE8E1',
+    coverBg: isDarkMode ? '#0B1015' : '#1E2D3B',
+  };
+
+  // --- 4. HESAPLAMALAR ---
   const getAllItems = (): SearchItem[] => {
     const result: SearchItem[] = [];
     libraries.forEach((lib) => {
@@ -242,7 +278,7 @@ export default function Index() {
     count: allItems.filter((i) => i.type === type).length,
   }));
 
-  // --- 4. SIRA DEĞİŞTİRME & CRUD ---
+  // --- 5. CRUD İŞLEMLERİ ---
   const moveItemOrder = (itemId: string, direction: 'up' | 'down') => {
     if (!selectedLibrary || !selectedShelf) return;
 
@@ -327,6 +363,7 @@ export default function Index() {
         status: 'Başlanmadı',
         progress: '',
         note: '',
+        coverColor: selectedCoverColor,
       };
 
       updateShelfItems([...selectedShelf.items, newItem]);
@@ -342,6 +379,7 @@ export default function Index() {
     setEditStatus(item.status || 'Başlanmadı');
     setEditProgress(item.progress || '');
     setEditNote(item.note || '');
+    setEditCoverColor(item.coverColor || BOOK_COLORS[0]);
   };
 
   const saveItemDetails = () => {
@@ -350,7 +388,7 @@ export default function Index() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const updatedItems = selectedShelf.items.map((it) =>
         it.id === detailItem.id
-            ? { ...it, status: editStatus, progress: editProgress, note: editNote }
+            ? { ...it, status: editStatus, progress: editProgress, note: editNote, coverColor: editCoverColor }
             : it
     );
 
@@ -390,16 +428,11 @@ export default function Index() {
           i.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // RAFTAKİ İLK 3 ÖĞEYİ BULDURAN YARDIMCI FONKSİYON
-  const getTop3Items = (items: Item[]) => {
-    return items.slice(0, 3);
-  };
-
-  const bookColors = ['#2D5F4A', '#1E3A5F', '#A84B43', '#8C3B30', '#D9C589'];
+  const getTop3Items = (items: Item[]) => items.slice(0, 3);
 
   return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor: currentTheme.bg }]}>
           <PanGestureHandler onGestureEvent={onGestureEventClose} onHandlerStateChange={onGestureEndClose}>
             <View style={styles.mainContent}>
               <View style={styles.pageBody}>
@@ -410,9 +443,11 @@ export default function Index() {
                           <>
                             <Text style={styles.subHeaderTag}>YOUR PERSONAL COLLECTION</Text>
                             <View style={styles.headerRow}>
-                              <Text style={styles.faintTitle}>My Book Shelf</Text>
+                              <Text style={[styles.faintTitle, { color: currentTheme.textColor }]}>
+                                My Book Shelf
+                              </Text>
                               <TouchableOpacity
-                                  style={styles.addCircleButton}
+                                  style={[styles.addCircleButton, { backgroundColor: currentTheme.coverBg }]}
                                   onPress={() => setModalType('library')}
                               >
                                 <Text style={styles.addCircleButtonText}>+</Text>
@@ -420,15 +455,15 @@ export default function Index() {
                             </View>
 
                             <TouchableOpacity
-                                style={styles.searchBarFake}
+                                style={[styles.searchBarFake, { backgroundColor: currentTheme.inputBg, borderColor: currentTheme.border }]}
                                 onPress={() => setActiveTab('search')}
                             >
                               <Text style={styles.searchBarPlaceholder}>🔍 Find a book, author, or shelf</Text>
                             </TouchableOpacity>
 
                             <View style={styles.sectionHeaderRow}>
-                              <Text style={styles.sectionTitle}>Your shelves</Text>
-                              <Text style={styles.sectionMetaText}>
+                              <Text style={[styles.sectionTitle, { color: currentTheme.textColor }]}>Your shelves</Text>
+                              <Text style={[styles.sectionMetaText, { color: currentTheme.subTextColor }]}>
                                 {totalItemsCount} books · {totalShelves} shelves
                               </Text>
                             </View>
@@ -443,7 +478,7 @@ export default function Index() {
                                   return (
                                       <View style={styles.cardRow}>
                                         <TouchableOpacity
-                                            style={styles.cardMain}
+                                            style={[styles.cardMain, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}
                                             onPress={() => setSelectedLibrary(item)}
                                         >
                                           <View style={styles.woodShelfPreview}>
@@ -453,7 +488,7 @@ export default function Index() {
                                                         key={it.id}
                                                         style={[
                                                           styles.bookCoverMock,
-                                                          { backgroundColor: bookColors[idx % bookColors.length] },
+                                                          { backgroundColor: it.coverColor || BOOK_COLORS[idx % BOOK_COLORS.length] },
                                                         ]}
                                                     >
                                                       <Text style={styles.bookCoverText} numberOfLines={3}>
@@ -465,9 +500,9 @@ export default function Index() {
                                                 <Text style={styles.emptyShelfLabel}>Boş Raf</Text>
                                             )}
                                           </View>
-                                          <View style={styles.cardBottomInfo}>
-                                            <Text style={styles.cardTitle}>{item.name}</Text>
-                                            <Text style={styles.cardSubtitle}>
+                                          <View style={[styles.cardBottomInfo, { backgroundColor: currentTheme.cardBg }]}>
+                                            <Text style={[styles.cardTitle, { color: currentTheme.textColor }]}>{item.name}</Text>
+                                            <Text style={[styles.cardSubtitle, { color: currentTheme.subTextColor }]}>
                                               Shelf A - Row {item.shelves.length} · {libItems.length} books
                                             </Text>
                                           </View>
@@ -482,7 +517,7 @@ export default function Index() {
                                   );
                                 }}
                                 ListEmptyComponent={
-                                  <Text style={styles.emptyText}>Henüz hiç kitaplık eklenmedi.</Text>
+                                  <Text style={[styles.emptyText, { color: currentTheme.subTextColor }]}>Henüz hiç kitaplık eklenmedi.</Text>
                                 }
                                 ListFooterComponent={
                                   <TouchableOpacity
@@ -499,16 +534,16 @@ export default function Index() {
                       {selectedLibrary && !selectedShelf && (
                           <>
                             <TouchableOpacity
-                                style={styles.backButtonContainer}
+                                style={[styles.backButtonContainer, { backgroundColor: currentTheme.inputBg }]}
                                 onPress={() => setSelectedLibrary(null)}
                             >
-                              <Text style={styles.backButtonText}>⬅ Kitaplıklara Dön</Text>
+                              <Text style={[styles.backButtonText, { color: currentTheme.textColor }]}>⬅ Kitaplıklara Dön</Text>
                             </TouchableOpacity>
 
                             <View style={styles.headerRow}>
-                              <Text style={styles.faintTitle}>{selectedLibrary.name}</Text>
+                              <Text style={[styles.faintTitle, { color: currentTheme.textColor }]}>{selectedLibrary.name}</Text>
                               <TouchableOpacity
-                                  style={styles.addCircleButton}
+                                  style={[styles.addCircleButton, { backgroundColor: currentTheme.coverBg }]}
                                   onPress={() => setModalType('shelf')}
                               >
                                 <Text style={styles.addCircleButtonText}>+</Text>
@@ -524,7 +559,7 @@ export default function Index() {
                                   return (
                                       <View style={styles.cardRow}>
                                         <TouchableOpacity
-                                            style={styles.cardMain}
+                                            style={[styles.cardMain, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}
                                             onPress={() => setSelectedShelf(item)}
                                         >
                                           <View style={styles.woodShelfPreview}>
@@ -534,7 +569,7 @@ export default function Index() {
                                                         key={it.id}
                                                         style={[
                                                           styles.bookCoverMock,
-                                                          { backgroundColor: bookColors[(idx + 1) % bookColors.length] },
+                                                          { backgroundColor: it.coverColor || BOOK_COLORS[(idx + 1) % BOOK_COLORS.length] },
                                                         ]}
                                                     >
                                                       <Text style={styles.bookCoverText} numberOfLines={3}>
@@ -546,9 +581,9 @@ export default function Index() {
                                                 <Text style={styles.emptyShelfLabel}>Boş Raf</Text>
                                             )}
                                           </View>
-                                          <View style={styles.cardBottomInfo}>
-                                            <Text style={styles.cardTitle}>{item.name}</Text>
-                                            <Text style={styles.cardSubtitle}>{item.items.length} books</Text>
+                                          <View style={[styles.cardBottomInfo, { backgroundColor: currentTheme.cardBg }]}>
+                                            <Text style={[styles.cardTitle, { color: currentTheme.textColor }]}>{item.name}</Text>
+                                            <Text style={[styles.cardSubtitle, { color: currentTheme.subTextColor }]}>{item.items.length} books</Text>
                                           </View>
                                         </TouchableOpacity>
                                         <TouchableOpacity
@@ -561,7 +596,7 @@ export default function Index() {
                                   );
                                 }}
                                 ListEmptyComponent={
-                                  <Text style={styles.emptyText}>Bu kitaplıkta raf yok.</Text>
+                                  <Text style={[styles.emptyText, { color: currentTheme.subTextColor }]}>Bu kitaplıkta raf yok.</Text>
                                 }
                             />
                           </>
@@ -570,16 +605,16 @@ export default function Index() {
                       {selectedLibrary && selectedShelf && (
                           <>
                             <TouchableOpacity
-                                style={styles.backButtonContainer}
+                                style={[styles.backButtonContainer, { backgroundColor: currentTheme.inputBg }]}
                                 onPress={() => setSelectedShelf(null)}
                             >
-                              <Text style={styles.backButtonText}>⬅ Raflara Dön</Text>
+                              <Text style={[styles.backButtonText, { color: currentTheme.textColor }]}>⬅ Raflara Dön</Text>
                             </TouchableOpacity>
 
                             <View style={styles.headerRow}>
-                              <Text style={styles.faintTitle}>{selectedShelf.name}</Text>
+                              <Text style={[styles.faintTitle, { color: currentTheme.textColor }]}>{selectedShelf.name}</Text>
                               <TouchableOpacity
-                                  style={styles.addCircleButton}
+                                  style={[styles.addCircleButton, { backgroundColor: currentTheme.coverBg }]}
                                   onPress={() => setModalType('item')}
                               >
                                 <Text style={styles.addCircleButtonText}>+</Text>
@@ -591,16 +626,16 @@ export default function Index() {
                                 keyExtractor={(item) => item.id}
                                 renderItem={({ item, index }) => (
                                     <View style={styles.itemCardRow}>
-                                      <View style={styles.orderActions}>
+                                      <View style={[styles.orderActions, { backgroundColor: currentTheme.cardBg }]}>
                                         <TouchableOpacity
                                             disabled={index === 0}
                                             onPress={() => moveItemOrder(item.id, 'up')}
                                         >
-                                          <Text style={[styles.arrowText, index === 0 && styles.disabledText]}>
+                                          <Text style={[styles.arrowText, { color: currentTheme.textColor }, index === 0 && styles.disabledText]}>
                                             ▲
                                           </Text>
                                         </TouchableOpacity>
-                                        <Text style={styles.orderBadge}>{item.orderNo}</Text>
+                                        <Text style={[styles.orderBadge, { color: currentTheme.textColor }]}>{item.orderNo}</Text>
                                         <TouchableOpacity
                                             disabled={index === selectedShelf.items.length - 1}
                                             onPress={() => moveItemOrder(item.id, 'down')}
@@ -608,6 +643,7 @@ export default function Index() {
                                           <Text
                                               style={[
                                                 styles.arrowText,
+                                                { color: currentTheme.textColor },
                                                 index === selectedShelf.items.length - 1 && styles.disabledText,
                                               ]}
                                           >
@@ -617,11 +653,11 @@ export default function Index() {
                                       </View>
 
                                       <TouchableOpacity
-                                          style={styles.itemCardMain}
+                                          style={[styles.itemCardMain, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border, borderLeftWidth: 6, borderLeftColor: item.coverColor || BOOK_COLORS[0] }]}
                                           onPress={() => openDetailModal(item)}
                                       >
                                         <View style={styles.cardHeader}>
-                                          <Text style={styles.itemTitleText}>{item.title}</Text>
+                                          <Text style={[styles.itemTitleText, { color: currentTheme.textColor }]}>{item.title}</Text>
                                           <View style={styles.typeTag}>
                                             <Text style={styles.typeTagText}>{item.type}</Text>
                                           </View>
@@ -630,7 +666,7 @@ export default function Index() {
                                         <View style={styles.itemMetaRow}>
                                           <Text style={styles.statusBadge}>{item.status || 'Başlanmadı'}</Text>
                                           {item.progress ? (
-                                              <Text style={styles.progressText}>📍 {item.progress}</Text>
+                                              <Text style={[styles.progressText, { color: currentTheme.subTextColor }]}>📍 {item.progress}</Text>
                                           ) : null}
                                         </View>
 
@@ -650,7 +686,7 @@ export default function Index() {
                                     </View>
                                 )}
                                 ListEmptyComponent={
-                                  <Text style={styles.emptyText}>Bu rafta henüz öge yok.</Text>
+                                  <Text style={[styles.emptyText, { color: currentTheme.subTextColor }]}>Bu rafta henüz öge yok.</Text>
                                 }
                             />
                           </>
@@ -661,9 +697,9 @@ export default function Index() {
                 {/* TAB 2: ARAMA */}
                 {activeTab === 'search' && (
                     <View style={styles.tabContent}>
-                      <Text style={styles.faintTitle}>Arama</Text>
+                      <Text style={[styles.faintTitle, { color: currentTheme.textColor }]}>Arama</Text>
                       <TextInput
-                          style={styles.searchInput}
+                          style={[styles.searchInput, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border, color: currentTheme.textColor }]}
                           placeholder="Find a book, author, or shelf..."
                           placeholderTextColor="#A89A8B"
                           value={searchQuery}
@@ -675,24 +711,24 @@ export default function Index() {
                           keyExtractor={(item) => item.id}
                           renderItem={({ item }) => (
                               <TouchableOpacity
-                                  style={[styles.cardMain, { marginBottom: 10 }]}
+                                  style={[styles.cardMain, { marginBottom: 10, backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}
                                   onPress={() => openDetailModal(item)}
                               >
                                 <View style={styles.cardHeader}>
-                                  <Text style={styles.itemTitleText}>{item.title}</Text>
+                                  <Text style={[styles.itemTitleText, { color: currentTheme.textColor }]}>{item.title}</Text>
                                   <View style={styles.typeTag}>
                                     <Text style={styles.typeTagText}>{item.type}</Text>
                                   </View>
                                 </View>
-                                <Text style={styles.cardSubtitle}>
-                                  📍 <Text style={styles.highlight}>{item.libraryName}</Text> ➔{' '}
-                                  <Text style={styles.highlight}>{item.shelfName}</Text>'in{' '}
-                                  <Text style={styles.highlight}>{item.orderNo}. sırası</Text>
+                                <Text style={[styles.cardSubtitle, { color: currentTheme.subTextColor }]}>
+                                  📍 <Text style={{ fontWeight: 'bold', color: currentTheme.textColor }}>{item.libraryName}</Text> ➔{' '}
+                                  <Text style={{ fontWeight: 'bold', color: currentTheme.textColor }}>{item.shelfName}</Text>'in{' '}
+                                  <Text style={{ fontWeight: 'bold', color: currentTheme.textColor }}>{item.orderNo}. sırası</Text>
                                 </Text>
                               </TouchableOpacity>
                           )}
                           ListEmptyComponent={
-                            <Text style={styles.emptyText}>
+                            <Text style={[styles.emptyText, { color: currentTheme.subTextColor }]}>
                               {searchQuery ? 'Öge bulunamadı.' : 'Arama yapmak için yazın.'}
                             </Text>
                           }
@@ -700,28 +736,93 @@ export default function Index() {
                     </View>
                 )}
 
-                {/* TAB 3: İSTATİSTİKLER */}
+                {/* TAB 3: İSTATİSTİKLER & PLANLAMA */}
                 {activeTab === 'stats' && (
                     <ScrollView style={styles.tabContent}>
-                      <Text style={styles.faintTitle}>Raporlar</Text>
+                      <Text style={[styles.faintTitle, { color: currentTheme.textColor }]}>Rapor & Ajanda</Text>
 
-                      <View style={styles.statsGrid}>
-                        <View style={styles.statCard}>
-                          <Text style={styles.statNumber}>{totalLibraries}</Text>
-                          <Text style={styles.statLabel}>Kitaplık</Text>
+                      {/* AJANDA VE HEDEF TAKİBİ */}
+                      <Text style={[styles.sectionSubtitleText, { color: currentTheme.textColor }]}>📅 Günlük & Aylık Okuma Planı:</Text>
+                      <View style={[styles.plannerCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                        <View style={styles.plannerRow}>
+                          <Text style={[styles.plannerLabel, { color: currentTheme.textColor }]}>Günlük Sayfa Hedefi:</Text>
+                          <View style={styles.plannerInputGroup}>
+                            <TextInput
+                                style={[styles.plannerInput, { backgroundColor: currentTheme.inputBg, color: currentTheme.textColor }]}
+                                keyboardType="numeric"
+                                value={goals.dailyPageCurrent}
+                                onChangeText={(v) => setGoals({ ...goals, dailyPageCurrent: v })}
+                            />
+                            <Text style={{ color: currentTheme.subTextColor }}> / </Text>
+                            <TextInput
+                                style={[styles.plannerInput, { backgroundColor: currentTheme.inputBg, color: currentTheme.textColor }]}
+                                keyboardType="numeric"
+                                value={goals.dailyPageTarget}
+                                onChangeText={(v) => setGoals({ ...goals, dailyPageTarget: v })}
+                            />
+                            <Text style={{ color: currentTheme.subTextColor }}> Sayfa</Text>
+                          </View>
                         </View>
-                        <View style={styles.statCard}>
-                          <Text style={styles.statNumber}>{totalShelves}</Text>
-                          <Text style={styles.statLabel}>Raf</Text>
+
+                        <View style={styles.plannerRow}>
+                          <Text style={[styles.plannerLabel, { color: currentTheme.textColor }]}>Haftalık Biten Öge:</Text>
+                          <View style={styles.plannerInputGroup}>
+                            <TextInput
+                                style={[styles.plannerInput, { backgroundColor: currentTheme.inputBg, color: currentTheme.textColor }]}
+                                keyboardType="numeric"
+                                value={goals.weeklyCurrent}
+                                onChangeText={(v) => setGoals({ ...goals, weeklyCurrent: v })}
+                            />
+                            <Text style={{ color: currentTheme.subTextColor }}> / </Text>
+                            <TextInput
+                                style={[styles.plannerInput, { backgroundColor: currentTheme.inputBg, color: currentTheme.textColor }]}
+                                keyboardType="numeric"
+                                value={goals.weeklyTarget}
+                                onChangeText={(v) => setGoals({ ...goals, weeklyTarget: v })}
+                            />
+                            <Text style={{ color: currentTheme.subTextColor }}> Adet</Text>
+                          </View>
                         </View>
-                        <View style={styles.statCard}>
-                          <Text style={styles.statNumber}>{totalItemsCount}</Text>
-                          <Text style={styles.statLabel}>Toplam Öge</Text>
+
+                        <View style={styles.plannerRow}>
+                          <Text style={[styles.plannerLabel, { color: currentTheme.textColor }]}>Aylık Biten Öge:</Text>
+                          <View style={styles.plannerInputGroup}>
+                            <TextInput
+                                style={[styles.plannerInput, { backgroundColor: currentTheme.inputBg, color: currentTheme.textColor }]}
+                                keyboardType="numeric"
+                                value={goals.monthlyCurrent}
+                                onChangeText={(v) => setGoals({ ...goals, monthlyCurrent: v })}
+                            />
+                            <Text style={{ color: currentTheme.subTextColor }}> / </Text>
+                            <TextInput
+                                style={[styles.plannerInput, { backgroundColor: currentTheme.inputBg, color: currentTheme.textColor }]}
+                                keyboardType="numeric"
+                                value={goals.monthlyTarget}
+                                onChangeText={(v) => setGoals({ ...goals, monthlyTarget: v })}
+                            />
+                            <Text style={{ color: currentTheme.subTextColor }}> Adet</Text>
+                          </View>
                         </View>
                       </View>
 
-                      <View style={styles.progressContainer}>
-                        <Text style={styles.sectionSubtitleText}>
+                      <Text style={[styles.sectionSubtitleText, { color: currentTheme.textColor, marginTop: 15 }]}>📊 Koleksiyon İstatistikleri:</Text>
+                      <View style={styles.statsGrid}>
+                        <View style={[styles.statCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                          <Text style={[styles.statNumber, { color: currentTheme.textColor }]}>{totalLibraries}</Text>
+                          <Text style={[styles.statLabel, { color: currentTheme.subTextColor }]}>Kitaplık</Text>
+                        </View>
+                        <View style={[styles.statCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                          <Text style={[styles.statNumber, { color: currentTheme.textColor }]}>{totalShelves}</Text>
+                          <Text style={[styles.statLabel, { color: currentTheme.subTextColor }]}>Raf</Text>
+                        </View>
+                        <View style={[styles.statCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                          <Text style={[styles.statNumber, { color: currentTheme.textColor }]}>{totalItemsCount}</Text>
+                          <Text style={[styles.statLabel, { color: currentTheme.subTextColor }]}>Toplam Öge</Text>
+                        </View>
+                      </View>
+
+                      <View style={[styles.progressContainer, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                        <Text style={[styles.sectionSubtitleText, { color: currentTheme.textColor }]}>
                           Tamamlanma Oranı: %{completionPercentage} ({completedItemsCount}/{totalItemsCount})
                         </Text>
                         <View style={styles.progressBarBackground}>
@@ -729,22 +830,35 @@ export default function Index() {
                         </View>
                       </View>
 
-                      <Text style={styles.sectionSubtitleText}>Tür Dağılımı:</Text>
+                      <Text style={[styles.sectionSubtitleText, { color: currentTheme.textColor }]}>Tür Dağılımı:</Text>
                       {typeCounts.map((tc, idx) => (
-                          <View key={idx} style={styles.typeStatRow}>
-                            <Text style={styles.typeStatName}>{tc.type}</Text>
+                          <View key={idx} style={[styles.typeStatRow, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                            <Text style={[styles.typeStatName, { color: currentTheme.textColor }]}>{tc.type}</Text>
                             <Text style={styles.typeStatCount}>{tc.count} adet</Text>
                           </View>
                       ))}
                     </ScrollView>
                 )}
 
-                {/* TAB 4: AYARLAR */}
+                {/* TAB 4: AYARLAR VE KARANLIK MOD */}
                 {activeTab === 'settings' && (
                     <ScrollView style={styles.tabContent}>
-                      <Text style={styles.faintTitle}>Ayarlar</Text>
-                      <Text style={styles.sectionSubtitleText}>Mevcut Öge Türleri:</Text>
+                      <Text style={[styles.faintTitle, { color: currentTheme.textColor }]}>Ayarlar</Text>
 
+                      {/* KARANLIK MOD SWITCH */}
+                      <View style={[styles.settingSwitchRow, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                        <Text style={[styles.settingSwitchLabel, { color: currentTheme.textColor }]}>🌙 Karanlık Mod (Dark Theme)</Text>
+                        <Switch
+                            value={isDarkMode}
+                            onValueChange={(val) => {
+                              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                              setIsDarkMode(val);
+                            }}
+                            trackColor={{ false: '#767577', true: '#B89252' }}
+                        />
+                      </View>
+
+                      <Text style={[styles.sectionSubtitleText, { color: currentTheme.textColor }]}>Mevcut Öge Türleri (Prefab):</Text>
                       <View style={styles.typeChipContainer}>
                         {itemTypes.map((type, idx) => (
                             <View key={idx} style={styles.typeChip}>
@@ -755,20 +869,20 @@ export default function Index() {
 
                       <View style={styles.addTypeRow}>
                         <TextInput
-                            style={styles.typeInput}
+                            style={[styles.typeInput, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border, color: currentTheme.textColor }]}
                             placeholder="Yeni Tür (Örn: Figür)"
                             placeholderTextColor="#A89A8B"
                             value={newTypeName}
                             onChangeText={setNewTypeName}
                         />
-                        <TouchableOpacity style={styles.addTypeBtn} onPress={handleAddType}>
+                        <TouchableOpacity style={[styles.addTypeBtn, { backgroundColor: currentTheme.coverBg }]} onPress={handleAddType}>
                           <Text style={styles.addTypeBtnText}>+ Ekle</Text>
                         </TouchableOpacity>
                       </View>
 
-                      <Text style={[styles.sectionSubtitleText, { marginTop: 20 }]}>💾 Veri Yedekleme (JSON):</Text>
+                      <Text style={[styles.sectionSubtitleText, { color: currentTheme.textColor, marginTop: 20 }]}>💾 Veri Yedekleme (JSON):</Text>
                       <TouchableOpacity
-                          style={styles.backupBtn}
+                          style={[styles.backupBtn, { backgroundColor: currentTheme.coverBg }]}
                           onPress={() => setIsImportModalOpen(true)}
                       >
                         <Text style={styles.backupBtnText}>📥 JSON Yedek Yükle / Aktar</Text>
@@ -777,7 +891,7 @@ export default function Index() {
                 )}
               </View>
 
-              {/* DİKEY AYRAÇLAR (FIGMA RENKLERİ) */}
+              {/* DİKEY AYRAÇLAR */}
               <View style={styles.bookmarkContainer}>
                 <TouchableOpacity
                     style={[
@@ -804,6 +918,17 @@ export default function Index() {
                 <TouchableOpacity
                     style={[
                       styles.bookmark,
+                      { backgroundColor: '#D99B26' },
+                      activeTab === 'stats' && styles.activeBookmark,
+                    ]}
+                    onPress={() => setActiveTab('stats')}
+                >
+                  <Text style={styles.bookmarkText}>Planner</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[
+                      styles.bookmark,
                       { backgroundColor: '#5C785B' },
                       activeTab === 'settings' && styles.activeBookmark,
                     ]}
@@ -815,28 +940,22 @@ export default function Index() {
             </View>
           </PanGestureHandler>
 
-          {/* 3D KAPAK (FIGMA BİREBİR TASARIMI) */}
+          {/* 3D KAPAK */}
           {(!isBookOpen || dragProgress.value < 1) && (
               <PanGestureHandler onGestureEvent={onGestureEventOpen} onHandlerStateChange={onGestureEndOpen}>
-                <Animated.View style={[styles.coverOverlay, cover3DAnimatedStyle]}>
+                <Animated.View style={[styles.coverOverlay, cover3DAnimatedStyle, { backgroundColor: currentTheme.coverBg }]}>
                   <View style={styles.coverInnerFrame}>
                     <Text style={styles.coverSubTag}>A PERSONAL COLLECTION</Text>
-
                     <Text style={styles.coverBookIcon}>📖</Text>
-
                     <Text style={styles.coverMainTitle}>MY{'\n'}LIBRARY</Text>
-
                     <View style={styles.coverDivider} />
-
                     <Text style={styles.coverItalicQuote}>
                       A place for every book.{'\n'}A story on every shelf.
                     </Text>
-
                     <View style={styles.coverFooterHint}>
                       <Text style={styles.coverArrow}>←</Text>
                       <Text style={styles.coverSwipeText}>SWIPE LEFT TO OPEN</Text>
                     </View>
-
                     <Text style={styles.coverBrandText}>My Book Shelf</Text>
                   </View>
                 </Animated.View>
@@ -846,15 +965,15 @@ export default function Index() {
           {/* MODAL: EKLEME */}
           <Modal visible={!!modalType} animationType="slide" transparent={true}>
             <View style={styles.modalOverlay}>
-              <View style={styles.modalContainer}>
-                <Text style={styles.modalTitle}>
+              <View style={[styles.modalContainer, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                <Text style={[styles.modalTitle, { color: currentTheme.textColor }]}>
                   {modalType === 'library' && 'Yeni Kitaplık Oluştur'}
                   {modalType === 'shelf' && 'Yeni Raf Oluştur'}
                   {modalType === 'item' && 'Yeni Öge Ekle'}
                 </Text>
 
                 <TextInput
-                    style={styles.modalInput}
+                    style={[styles.modalInput, { backgroundColor: currentTheme.inputBg, borderColor: currentTheme.border, color: currentTheme.textColor }]}
                     placeholder={
                       modalType === 'library'
                           ? 'Örn: Salon Kitaplığı'
@@ -862,13 +981,14 @@ export default function Index() {
                               ? 'Örn: 1. Raf'
                               : 'Adı (Örn: The Witcher 3)'
                     }
+                    placeholderTextColor="#A89A8B"
                     value={newItemTitle}
                     onChangeText={setNewItemTitle}
                 />
 
                 {modalType === 'item' && (
                     <>
-                      <Text style={styles.label}>Tür Seçin (Prefab):</Text>
+                      <Text style={[styles.label, { color: currentTheme.subTextColor }]}>Tür Seçin (Prefab):</Text>
                       <View style={styles.typeSelectorRow}>
                         {itemTypes.map((type) => (
                             <TouchableOpacity
@@ -891,9 +1011,26 @@ export default function Index() {
                         ))}
                       </View>
 
+                      {/* KİTAP KAPAK RENGİ SEÇİCİ */}
+                      <Text style={[styles.label, { color: currentTheme.subTextColor }]}>Kapak Rengi Seçin:</Text>
+                      <View style={styles.colorPaletteRow}>
+                        {BOOK_COLORS.map((clr) => (
+                            <TouchableOpacity
+                                key={clr}
+                                style={[
+                                  styles.colorCircle,
+                                  { backgroundColor: clr },
+                                  selectedCoverColor === clr && styles.selectedColorCircle,
+                                ]}
+                                onPress={() => setSelectedCoverColor(clr)}
+                            />
+                        ))}
+                      </View>
+
                       <TextInput
-                          style={styles.modalInput}
+                          style={[styles.modalInput, { backgroundColor: currentTheme.inputBg, borderColor: currentTheme.border, color: currentTheme.textColor }]}
                           placeholder="Raftaki Sırası (Opsiyonel)"
+                          placeholderTextColor="#A89A8B"
                           keyboardType="numeric"
                           value={newOrderNo}
                           onChangeText={setNewOrderNo}
@@ -923,10 +1060,10 @@ export default function Index() {
           {/* MODAL: DETAY */}
           <Modal visible={!!detailItem} animationType="fade" transparent={true}>
             <View style={styles.modalOverlay}>
-              <View style={styles.modalContainer}>
-                <Text style={styles.modalTitle}>📝 {detailItem?.title} (Detaylar)</Text>
+              <View style={[styles.modalContainer, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                <Text style={[styles.modalTitle, { color: currentTheme.textColor }]}>📝 {detailItem?.title} (Detaylar)</Text>
 
-                <Text style={styles.label}>Durum Seçimi (Opsiyonel):</Text>
+                <Text style={[styles.label, { color: currentTheme.subTextColor }]}>Durum Seçimi (Opsiyonel):</Text>
                 <View style={styles.typeSelectorRow}>
                   {['Başlanmadı', 'Okunuyor/Oynanıyor', 'Tamamlandı', 'İstek Listesi'].map((st) => (
                       <TouchableOpacity
@@ -946,18 +1083,36 @@ export default function Index() {
                   ))}
                 </View>
 
-                <Text style={styles.label}>Kalınan Yer / İlerleme (Opsiyonel):</Text>
+                {/* KİTAP KAPAK RENGİ DEĞİŞTİRME */}
+                <Text style={[styles.label, { color: currentTheme.subTextColor }]}>Kapak Rengini Değiştir:</Text>
+                <View style={styles.colorPaletteRow}>
+                  {BOOK_COLORS.map((clr) => (
+                      <TouchableOpacity
+                          key={clr}
+                          style={[
+                            styles.colorCircle,
+                            { backgroundColor: clr },
+                            editCoverColor === clr && styles.selectedColorCircle,
+                          ]}
+                          onPress={() => setEditCoverColor(clr)}
+                      />
+                  ))}
+                </View>
+
+                <Text style={[styles.label, { color: currentTheme.subTextColor }]}>Kalınan Yer / İlerleme (Opsiyonel):</Text>
                 <TextInput
-                    style={styles.modalInput}
+                    style={[styles.modalInput, { backgroundColor: currentTheme.inputBg, borderColor: currentTheme.border, color: currentTheme.textColor }]}
                     placeholder="Örn: Sayfa 145 veya %60"
+                    placeholderTextColor="#A89A8B"
                     value={editProgress}
                     onChangeText={setEditProgress}
                 />
 
-                <Text style={styles.label}>Kişisel Not (Opsiyonel):</Text>
+                <Text style={[styles.label, { color: currentTheme.subTextColor }]}>Kişisel Not (Opsiyonel):</Text>
                 <TextInput
-                    style={[styles.modalInput, { height: 70, textAlignVertical: 'top' }]}
+                    style={[styles.modalInput, { height: 70, textAlignVertical: 'top', backgroundColor: currentTheme.inputBg, borderColor: currentTheme.border, color: currentTheme.textColor }]}
                     placeholder="Örn: Arkadaşa ödünç verdim..."
+                    placeholderTextColor="#A89A8B"
                     multiline={true}
                     value={editNote}
                     onChangeText={setEditNote}
@@ -985,12 +1140,13 @@ export default function Index() {
           {/* MODAL: JSON IMPORT */}
           <Modal visible={isImportModalOpen} animationType="slide" transparent={true}>
             <View style={styles.modalOverlay}>
-              <View style={styles.modalContainer}>
-                <Text style={styles.modalTitle}>📥 JSON Veri Yükleme</Text>
-                <Text style={styles.label}>Yedek JSON Metnini Buraya Yapıştırın:</Text>
+              <View style={[styles.modalContainer, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.border }]}>
+                <Text style={[styles.modalTitle, { color: currentTheme.textColor }]}>📥 JSON Veri Yükleme</Text>
+                <Text style={[styles.label, { color: currentTheme.subTextColor }]}>Yedek JSON Metnini Buraya Yapıştırın:</Text>
                 <TextInput
-                    style={[styles.modalInput, { height: 100, textAlignVertical: 'top' }]}
+                    style={[styles.modalInput, { height: 100, textAlignVertical: 'top', backgroundColor: currentTheme.inputBg, borderColor: currentTheme.border, color: currentTheme.textColor }]}
                     placeholder='[{"id":"1", "name":"Kitaplık", ...}]'
+                    placeholderTextColor="#A89A8B"
                     multiline={true}
                     value={jsonInput}
                     onChangeText={setJsonInput}
@@ -1022,7 +1178,6 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EFEB',
   },
   coverOverlay: {
     position: 'absolute',
@@ -1030,7 +1185,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#1E2D3B',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -1126,14 +1280,12 @@ const styles = StyleSheet.create({
   },
   faintTitle: {
     fontSize: 26,
-    color: '#2C221E',
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
   addCircleButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#1E2D3B',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1143,9 +1295,7 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   searchBarFake: {
-    backgroundColor: '#EFE8E1',
     borderWidth: 1,
-    borderColor: '#E2D7CB',
     borderRadius: 12,
     padding: 12,
     marginBottom: 20,
@@ -1162,12 +1312,10 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    color: '#2C221E',
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
   sectionMetaText: {
     fontSize: 12,
-    color: '#8C7E72',
   },
   cardRow: {
     flexDirection: 'row',
@@ -1177,11 +1325,9 @@ const styles = StyleSheet.create({
   },
   cardMain: {
     flex: 1,
-    backgroundColor: '#FFF',
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E8DFD5',
     elevation: 2,
   },
   woodShelfPreview: {
@@ -1219,17 +1365,14 @@ const styles = StyleSheet.create({
   },
   cardBottomInfo: {
     padding: 14,
-    backgroundColor: '#FFFCF7',
   },
   cardTitle: {
     fontSize: 16,
-    color: '#2C221E',
     fontWeight: 'bold',
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
   cardSubtitle: {
     fontSize: 12,
-    color: '#8C7E72',
     marginTop: 3,
   },
   deleteBtn: {
@@ -1266,7 +1409,6 @@ const styles = StyleSheet.create({
   orderActions: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF',
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 6,
@@ -1274,7 +1416,6 @@ const styles = StyleSheet.create({
   arrowText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#1E2D3B',
   },
   disabledText: {
     color: '#D5C9BD',
@@ -1282,21 +1423,17 @@ const styles = StyleSheet.create({
   orderBadge: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#2C221E',
     marginVertical: 2,
   },
   itemCardMain: {
     flex: 1,
-    backgroundColor: '#FFFCF7',
     padding: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E8DFD5',
   },
   itemTitleText: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#2C221E',
   },
   itemMetaRow: {
     flexDirection: 'row',
@@ -1315,7 +1452,6 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 11,
-    color: '#8C7E72',
   },
   noteSnippet: {
     fontSize: 11,
@@ -1342,21 +1478,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   searchInput: {
-    backgroundColor: '#FFF',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2D7CB',
     fontSize: 15,
     marginBottom: 15,
   },
-  highlight: {
-    fontWeight: 'bold',
-    color: '#1E2D3B',
-  },
   emptyText: {
     textAlign: 'center',
-    color: '#8C7E72',
     marginTop: 30,
   },
   typeChipContainer: {
@@ -1383,15 +1512,12 @@ const styles = StyleSheet.create({
   },
   typeInput: {
     flex: 1,
-    backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#E2D7CB',
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   addTypeBtn: {
-    backgroundColor: '#1E2D3B',
     justifyContent: 'center',
     paddingHorizontal: 15,
     borderRadius: 6,
@@ -1401,7 +1527,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   backupBtn: {
-    backgroundColor: '#1E2D3B',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -1414,7 +1539,6 @@ const styles = StyleSheet.create({
   sectionSubtitleText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#2C221E',
     marginTop: 10,
     marginBottom: 8,
   },
@@ -1426,30 +1550,24 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 0.31,
-    backgroundColor: '#FFFCF7',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E8DFD5',
   },
   statNumber: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#2C221E',
   },
   statLabel: {
     fontSize: 11,
-    color: '#8C7E72',
     marginTop: 4,
   },
   progressContainer: {
-    backgroundColor: '#FFFCF7',
     padding: 15,
     borderRadius: 8,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E8DFD5',
   },
   progressBarBackground: {
     height: 10,
@@ -1465,17 +1583,14 @@ const styles = StyleSheet.create({
   typeStatRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFCF7',
     padding: 12,
     borderRadius: 6,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E8DFD5',
   },
   typeStatName: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#2C221E',
   },
   typeStatCount: {
     fontSize: 14,
@@ -1515,25 +1630,21 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: '85%',
-    backgroundColor: '#FFFCF7',
     borderRadius: 12,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#E8DFD5',
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: 'bold',
     marginBottom: 12,
     textAlign: 'center',
-    color: '#2C221E',
   },
   label: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#8C7E72',
     marginBottom: 6,
-    marginTop: 4,
+    marginTop: 8,
   },
   typeSelectorRow: {
     flexDirection: 'row',
@@ -1561,10 +1672,24 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: 'bold',
   },
-  modalInput: {
-    backgroundColor: '#FFF',
+  colorPaletteRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  colorCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2D7CB',
+    borderColor: 'rgba(0,0,0,0.2)',
+  },
+  selectedColorCircle: {
+    borderWidth: 3,
+    borderColor: '#B89252',
+  },
+  modalInput: {
+    borderWidth: 1,
     borderRadius: 6,
     padding: 10,
     marginBottom: 10,
@@ -1588,14 +1713,54 @@ const styles = StyleSheet.create({
   backButtonContainer: {
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#EFE8E1',
     borderRadius: 8,
     alignSelf: 'flex-start',
     marginBottom: 10,
     marginTop: 5,
   },
   backButtonText: {
-    color: '#1E2D3B',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  settingSwitchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 15,
+  },
+  settingSwitchLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  plannerCard: {
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 15,
+  },
+  plannerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  plannerLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  plannerInputGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  plannerInput: {
+    width: 40,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    textAlign: 'center',
     fontWeight: 'bold',
     fontSize: 13,
   },
